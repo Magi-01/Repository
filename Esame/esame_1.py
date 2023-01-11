@@ -14,17 +14,10 @@ class MovingAverage:
         if data == [] or data == None or not isinstance(self.window,int):
             raise ExamException('Errore, lista vuota')
 
-        if not isinstance(data,list) and not isinstance(data,tuple) and not isinstance(data,dict):
+        if not isinstance(data,list):
             if self.window > 1:
                 raise ExamException('Errore, lista vuota')
             return data
-
-        if data is not list:
-            for item in data:
-                try:
-                    int(item) or float(item)
-                except:
-                    raise ExamException('Errore, lista vuota')
 
         if self.window > len(data):
             raise ExamException('Errore, lista vuota')
@@ -50,3 +43,6 @@ class MovingAverage:
             return data
         return avg
 
+mavg = MovingAverage(5)
+#self.assertEqual(mavg.compute([2,4,8,16]), [3,6,12])
+print(mavg.compute([2,4,8,16,32]))
