@@ -49,3 +49,4 @@ class Diff:
         if avg == []:
             return data
         return avg
+
