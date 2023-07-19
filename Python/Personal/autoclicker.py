@@ -10,7 +10,7 @@ stop_key = KeyCode(char='b')
 
 class ClickMouse(threading.Thread):
     def __init__(self, delay, button):
-        super(ClickMouse, self).__init__
+        super(ClickMouse, self).__init__()
         self.delay = delay
         self.button = button
         self.running = False
@@ -50,4 +50,4 @@ def  on_press(key):
         listener.stop()
 
 with Listener(on_press=on_press) as listener:
-    listener.jois()
+    listener.join()
