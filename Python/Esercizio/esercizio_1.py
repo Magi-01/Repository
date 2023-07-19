@@ -42,7 +42,11 @@ while True:
 
 epoch_start = EpochConstruct(a)
 epoch_1 = epoch_start.epoch()
-
+for item in a:
+    if item % 4  != 0:
+        print("NB Bimestral")
+    elif item % 4 == 0:
+        print("Bimestral")
 plt.plot(epoch_1, color='tab:red')
 plt.plot(a,color='tab:blue')
 plt.plot()
