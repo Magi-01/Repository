@@ -40,7 +40,7 @@ click_thread.start()
 def  on_press(key):
     if key == start_stop_key:
         if click_thread.running:
-            click_thread.stop_clicking()
+            click_thread.stop_cliacking()
         else:
             click_thread.start_clicking()
 
