@@ -64,8 +64,15 @@ class MergeSort:
                 r += 1
         return a
 
-inn = [1, 10, 100, 1000, 10000]
+
+
+
+inn = [1, 10, 100, 1000]
+
+
 total_time = []
+
+
 for element in inn:
     start = time.time()
     sort = MergeSort()
@@ -82,7 +89,11 @@ plt.grid(True)
 plt.show()
 for element in out:
     print(element,"\n")
+
+
 total_time = []
+
+
 for element in inn:
     start = time.time()
     sort = MergeSort()

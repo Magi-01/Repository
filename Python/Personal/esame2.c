@@ -15,9 +15,8 @@ void * f (void*argc)
 {
     float z = 0;
     while(i < 1000000){
-        pthread_mutex_lock(&locki);
-        pthread_cond_wait(&locki,&cond);
-    
+        pthead_mutex_lock(&locki);
+        pthread_cond_wait(&locki,&cond); 
         z = 8*i + (4*i + 1)/7;
         //printf("trying i = %d, n = 0\n",(int)i);
         if ((int)z == z){
@@ -52,7 +51,7 @@ int main(int argc, char * argv[])
     pthread_join(t2,NULL);
     pthread_join(t3,NULL);
     pthread_join(t4,NULL);
-    
+
     for (int i = 0; i < k; i++){
         printf("i = %f\n",n[i]);
     }
