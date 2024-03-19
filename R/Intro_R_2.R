@@ -2,6 +2,9 @@
 
 x <- matrix(c(2,3,5,7,11,13), nrow=3)
 x
+x = c(1,10)
+y = 1:5
+x*y
 x <- matrix(c(2,3,5,7,11,13), ncol=3)
 x
 
@@ -78,7 +81,9 @@ y <- c(1.2, 3, 0.4, 10)
 2*y
 
 crossprod(c(1,2,3), c(0,12,13)) # prodotto scalare tra due vettori
-c(1,2,3) %*% c(0,12,13)
+m <- c(1,2,3) %*% c(0,12,13)
+m
+is.matrix(m)
 
 ## prodotto riga per colonna
 a <- matrix(c(1,2,3,4), ncol = 2, byrow = T)
@@ -131,12 +136,14 @@ l1
 l1[2]     # o in alternativa:
 mylist[[1]][2]
 
-# selezioniamo le prime due righe e tre colonne della matrice in posizione 3 nella lista
-# ...
+# selezioniamo le prime due righe e tre colonne della matrice in posizione
+# 3 nella lista
+l2 = mylist[[3]][1:2,1:3]
 
 x[[1]] <- x1 
 
 x[[4]] <- "questo è il quarto elemento della lista x"
+x
 
 mylist2 <- list(comp1 = x1, comp2 = x2, comp3 = x3)
 mylist2$comp1
@@ -146,9 +153,11 @@ is.list(newlist)
 str(newlist)
 
 names(mylist) <- c("A", "B", "C")
+names(mylist)
 names(mylist2)
 
-## valori speciali: NULL, TRUE (T), FALSE (F), NaN (not a number), NA (not available), Inf
+## valori speciali: NULL, TRUE (T), FALSE (F), NaN (not a number),
+## NA (not available), Inf
 0/0         #Not a Number
 a <- -1/0
 a           #-Inf
@@ -159,18 +168,23 @@ as.numeric("a")
 # vettori per variabili categoriali. Ogni gruppo corrisponde ad un livello
 country <- c("Italy","Germany","France","Germany","Germany","Germany",
              "France","Italy","Italy","France")
-
+str(country)
 countryf <- factor(country) # factor vs as.factor
+country
+countryf
 str(countryf)
 is.factor(countryf)
 as.factor(country)
 levels(countryf) 
 
-cbind(country, countryf)
+cbind(country, countryf) #column bind (binding the objects into a matrix,
+# making them all the same type; STRING (if they are not equal))
 
 # scegliere la prima classe
-?relevel
-relevel(countryf, "Italy")
+?relevel # relevel: first element you select while the rest remain in the same
+# order
+a <- relevel(countryf, "Italy")
+a
 #...o scegliere l'ordine delle classi
 factor(country, levels = c("Italy", "Germany", "France"))
 
@@ -194,27 +208,47 @@ levels(genderf) <- c("F","M")
 str(genderf)
 
 ######## Esercizi #########
-#1. Definisci un vettore x con gli elementi 5, 12, 13, 12. Converti questo vettore
-# in factor e ispeziona la sua struttura. Come vengono definiti i livelli?
+#1. Definisci un vettore x con gli elementi 5, 12, 13, 12. Converti questo
+# vettore in factor e ispeziona la sua struttura.
+# Come vengono definiti i livelli?
+x <- c(5,12,13,12)
+xf <- factor(x)
+str(xf)
+# Viene costruito livelli per ogni livello diverso del
+# vettore e un id per il valore.
 
 #2. Crea un factor dalla sequenza di stringhe "1", "1", "0", "1",
 # "1", "0". Cosa restituiscono length() e mode()?
+y <- c("1", "1", '0', '1','1', '0')
+yf <- factor(y)
+length(yf) # numeri degli elementi del nuovo vettore yf 
+# (in quanto yf è un vettore)
+length(levels(yf)) # numeri degli elementi nel vettore livelli
+mode(yf) # il tipo di dato numeric
 
 #3. Converti la variabile factor del punto precedente in un factor
 # con livelli "m" e "f". Cosa produce il comando table()?
+levels(yf) <- c('m','f')
+table(yf) # le istanze in cui un livello appare
 
 #4. Eseguire le seguenti righe
 v1 <- factor(letters[1:5])
 levels(v1) <- rev(levels(v1))
+v1
 v2 <- factor(letters[1:5], levels = rev(letters[1:5]))
+v2
 #Cosa succede a v1 quando modifichi i suoi livelli? In cosa differisce v2
 # da v1?
+# v1 i nomi dei livelli cambiano assieme ai sui valori
+# v2 ha i valori l'inverso di v1 ma livelli uguali
 
 
 
 # Data frames ----
-# è una lista ma può essere considerata come una matrice con colonne possibilmente di diverso tipo
-# le componenti devono essere vettori (numerici, caratteri o logici), fattori, matrici numeriche, liste o altri dataframe
+# è una lista ma può essere considerata come una matrice con colonne 
+# possibilmente di diverso tipo
+# le componenti devono essere vettori (numerici, caratteri o logici),
+# fattori, matrici numeriche, liste o altri dataframe
 # vettori e matrici devono avere la stessa dimensione
 # di solito memorizziamo le variabili nelle colonne e le unità nelle righe
 under40 <- age < 40
@@ -223,7 +257,6 @@ dat <- data.frame(Country=countryf, Age=age, Sex=genderf,
 str(dat)
 is.data.frame(dat)
 head(dat) #print the first 6 rows
-
 ## View(dat)
 
 # Subsetting
@@ -246,27 +279,31 @@ dat$Sex   #selezione di una sola colonna
 dat$Under40 <-  NULL
 head(dat)
 
-cbind.data.frame(dat, under40)
-cbind.data.frame(dat, Under40= under40*1)
+datboolunder40 <- cbind.data.frame(dat, under40)
+datnumunder40 <- cbind.data.frame(dat, Under40= under40*1)
 
 #creare una nuova variabile logica uguale a TRUE se Country == Italy
 dat$CountryTF <- dat$Country == "Italy"
+dat
 
 ## convertire i character in factor automaticamente
-df <- data.frame(x = 1:5, 
+dnotf <- data.frame(x = 1:5, 
                  y = c("A", "B", "C", "D", "E"))
-df <- data.frame(x = 1:5, 
+dasf <- data.frame(x = 1:5, 
                  y = c("A", "B", "C", "D", "E"),
                  stringsAsFactors = T)
+str(dnotf)
+str(dasf)
 
-Age #Le singole variabili non sono direttamente accessibili
+Country #Le singole variabili non sono direttamente accessibili
 
 attach(dat)
 Age
-dat$Age <- Age + 1 
+dat$Age <- Age + 1
 #Age <- Age + 1 #not run
 dat$Age
-Age #il nuovo valore della variabile Age non è visibile finché il data frame non viene scollegato
+Age #il nuovo valore della variabile Age non è visibile finché il data 
+# frame non viene scollegato
 detach(dat)
 Age
 dat$Age
@@ -277,8 +314,9 @@ x <- runif(8)
 y <- letters[1:8]
 z <- sample(c(rep(T,5),rep(F,3)))
 #Definisci un dataframe chiamato newdf con colonne z, y, x.
-
+newdf <- data.frame(z,y,x)
 
 #2. Crea un dataframe con 5 righe, utilizzando un elenco di caratteri
 # che rappresenta i nomi e un vettore di numeri che rappresentano le età.
-
+newnewdf <- data.frame(country[1:5], age[1:5])
+table(newnewdf)
