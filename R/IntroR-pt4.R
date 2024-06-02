@@ -116,8 +116,14 @@ dim(subset(AutoBi, subset=CLMAGE<20, select=CLMAGE))
 #4. Seleziona le variabili MARITAL e CLMINSUR ed i soggetti rappresentati da un 
 #avvocato, escludi i valori mancanti utilizzando la funzione na.omit
 
+test <- subset(AutoBi, subset = ((MARITAL!=0 & CLMINSUR!=0) & ATTORNEY==1),
+               select = c(MARITAL,CLMINSUR,ATTORNEY))
+test <- na.omit(test)
+test
+
 #5. Seleziona le donne di età inferiore ai 40 anni, sposate o divorziate, e con 
 # perdite superiori a cinquemila dollari.
+
 
 #6. Aggiungi una nuova colonna con la variabili LOSS su scala logaritmica
 

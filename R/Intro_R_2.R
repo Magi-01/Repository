@@ -205,6 +205,7 @@ genderf <- factor(gender)
 genderf
 levels(genderf) 
 levels(genderf) <- c("F","M")
+genderf
 str(genderf)
 
 ######## Esercizi #########
