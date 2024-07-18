@@ -33,3 +33,6 @@ ggplot(data = k, aes(rownames(k),colnames(k))) + geom_tile(color = "white")+
   theme_minimal()
 
 write.csv(k, file = "correlation.csv")
+
+data("mtcars")
+pairs(mtcars[,c("mpg", "disp", "hp", "wt")])
