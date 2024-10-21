@@ -86,62 +86,99 @@ def depthFirstSearch(problem):
     print "Is the start a goal?", problem.isGoalState(problem.getStartState())
     print "Start's successors:", problem.getSuccessors(problem.getStartState())
     """
-    visited = set()  # To track visited nodes
-    directions = []  # To track the directions taken
-    frontier = []    # Stack to store positions to explore
-    direction_history = []  # To store the directions corresponding to positions in frontier
+    from game import Directions
+    from util import Stack
 
-    from game import Directions, Configuration, Actions
+    visited = set()
+    frontier = Stack()  # To track visited nodes
+
     South = Directions.SOUTH
     West = Directions.WEST
     East = Directions.EAST
     North = Directions.NORTH
 
     # Get the starting position
-    current_position = problem.getStartState()
-    print("Start:", current_position)
-    print("Start's successors:", problem.getSuccessors(current_position))
-    print("Is the start a goal?", problem.isGoalState(current_position))
+    start_position = problem.getStartState()
+    print("Start:", start_position)
 
-    # Add start state to the frontier
-    frontier.append(current_position)
-    visited.add(current_position)
+    # Add start state to the frontier (as a tuple of position and empty path)
+    frontier.push((start_position, []))
 
     # Start exploring the graph
     while frontier:
-        # Get the current position by popping from the frontier
-        current_position = frontier.pop()
-        print("current_position:", current_position)
+        # Pop the current position and the path (directions) to reach there
+        current_position, current_directions = frontier.pop()
+        print("Current position:", current_position)
 
         # If the current position is the goal, return the directions taken
         if problem.isGoalState(current_position):
-            print("Goal found!")
-            break
+            return current_directions
 
-        # Add the current position to visited
-        visited.add(current_position)
-        print("Visited:", visited)
+        # If not visited, mark as visited and explore neighbors
+        if current_position not in visited:
+            visited.add(current_position)
+            print("Visited:", visited)
 
-        # Explore all successors (neighbors) of the current position
-        for successor, direction, _ in problem.getSuccessors(current_position):
-            if successor not in visited:
-                frontier.append(successor)        # Add new positions to explore
-                direction_history.append(direction)  # Save the direction for the new state
-                visited.add(successor)  # Mark this node as visited
+            # Explore all successors (neighbors) of the current position
+            for successor, direction, _ in problem.getSuccessors(current_position):
+                if successor not in visited:
+                    # Add the successor to the frontier and record the path to get there
+                    new_directions = current_directions + [direction]
+                    frontier.push((successor, new_directions))
 
-        # If we have directions stored, pop the latest one and add it to the direction list
-        if direction_history:
-            directions.append(direction_history.pop())
-            print("Direction:", directions)
+                    print(f"Successor: {successor}, Direction: {direction}")
+                    print("New directions stack:", new_directions)
 
-    # Return the list of directions taken to reach the goal
-    return directions
-    
-    util.raiseNotDefined()
+    # If we exhaust the frontier and haven't found the goal
+    return []
 
 def breadthFirstSearch(problem):
     """Search the shallowest nodes in the search tree first."""
-    "*** YOUR CODE HERE ***"
+    from game import Directions
+    from util import Queue
+
+    visited = set()
+    frontier = Queue()  # To track visited nodes
+
+    South = Directions.SOUTH
+    West = Directions.WEST
+    East = Directions.EAST
+    North = Directions.NORTH
+
+    # Get the starting position
+    start_position = problem.getStartState()
+    print("Start:", start_position)
+
+    # Add start state to the frontier (as a tuple of position and empty path)
+    frontier.push((start_position, []))
+
+    # Start exploring the graph
+    while frontier:
+        # Pop the current position and the path (directions) to reach there
+        current_position, current_directions = frontier.pop()
+        print("Current position:", current_position)
+
+        # If the current position is the goal, return the directions taken
+        if problem.isGoalState(current_position):
+            return current_directions
+
+        # If not visited, mark as visited and explore neighbors
+        if current_position not in visited:
+            visited.add(current_position)
+            print("Visited:", visited)
+
+            # Explore all successors (neighbors) of the current position
+            for successor, direction, _ in problem.getSuccessors(current_position):
+                if successor not in visited:
+                    # Add the successor to the frontier and record the path to get there
+                    new_directions = current_directions + [direction]
+                    frontier.push((successor, new_directions))
+
+                    print(f"Successor: {successor}, Direction: {direction}")
+                    print("New directions stack:", new_directions)
+
+    # If we exhaust the frontier and haven't found the goal
+    return []
     util.raiseNotDefined()
 
 def uniformCostSearch(problem):
