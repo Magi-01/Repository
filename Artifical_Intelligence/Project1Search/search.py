@@ -86,105 +86,91 @@ def depthFirstSearch(problem):
     print "Is the start a goal?", problem.isGoalState(problem.getStartState())
     print "Start's successors:", problem.getSuccessors(problem.getStartState())
     """
-    from game import Directions
     from util import Stack
-
-    visited = set()
-    frontier = Stack()  # To track visited nodes
-
-    South = Directions.SOUTH
-    West = Directions.WEST
-    East = Directions.EAST
-    North = Directions.NORTH
-
-    # Get the starting position
-    start_position = problem.getStartState()
-    print("Start:", start_position)
-
-    # Add start state to the frontier (as a tuple of position and empty path)
+    """
+    Performs Depth-First Search (DFS) to find a solution path to the goal.
+    """
+    visited = set()  # Track fully explored nodes
+    frontier = Stack()  # Stack for DFS
+    start_position = problem.getStartState()  # Starting position of Pacman
+    
+    # Initialize stack with the start position and an empty path
     frontier.push((start_position, []))
 
-    # Start exploring the graph
-    while frontier:
-        # Pop the current position and the path (directions) to reach there
+    while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
-        print("Current position:", current_position)
 
-        # If the current position is the goal, return the directions taken
+        # Check if the current position is the goal; if so, return the path to reach it
+        print(f"\nCurrent Position is {current_position} and goalstate is {problem.isGoalState(current_position)}")
         if problem.isGoalState(current_position):
             return current_directions
 
-        # If not visited, mark as visited and explore neighbors
+        # Process current position if it hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
-            print("Visited:", visited)
 
-            # Explore all successors (neighbors) of the current position
+            # Add each successor to the stack with the updated path
             for successor, direction, _ in problem.getSuccessors(current_position):
                 if successor not in visited:
-                    # Add the successor to the frontier and record the path to get there
-                    new_directions = current_directions + [direction]
-                    frontier.push((successor, new_directions))
+                    # Append direction to the path list for this new state
+                    frontier.push((successor, current_directions + [direction]))
 
-                    print(f"Successor: {successor}, Direction: {direction}")
-                    print("New directions stack:", new_directions)
-
-    # If we exhaust the frontier and haven't found the goal
+    # Return an empty path if no solution is found
     return []
+    util.raiseNotDefined()
 
 def breadthFirstSearch(problem):
     """Search the shallowest nodes in the search tree first."""
-    from game import Directions
     from util import Queue
 
     visited = set()
-    frontier = Queue()  # To track visited nodes
+    frontier = Queue()
 
-    South = Directions.SOUTH
-    West = Directions.WEST
-    East = Directions.EAST
-    North = Directions.NORTH
-
-    # Get the starting position
     start_position = problem.getStartState()
-    print("Start:", start_position)
-
-    # Add start state to the frontier (as a tuple of position and empty path)
     frontier.push((start_position, []))
 
-    # Start exploring the graph
-    while frontier:
-        # Pop the current position and the path (directions) to reach there
+    while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
-        print("Current position:", current_position)
 
-        # If the current position is the goal, return the directions taken
         if problem.isGoalState(current_position):
             return current_directions
 
-        # If not visited, mark as visited and explore neighbors
         if current_position not in visited:
             visited.add(current_position)
-            print("Visited:", visited)
 
-            # Explore all successors (neighbors) of the current position
             for successor, direction, _ in problem.getSuccessors(current_position):
                 if successor not in visited:
-                    # Add the successor to the frontier and record the path to get there
-                    new_directions = current_directions + [direction]
-                    frontier.push((successor, new_directions))
+                    frontier.push((successor, current_directions + [direction]))
 
-                    print(f"Successor: {successor}, Direction: {direction}")
-                    print("New directions stack:", new_directions)
-
-    # If we exhaust the frontier and haven't found the goal
     return []
     util.raiseNotDefined()
 
 def uniformCostSearch(problem):
     """Search the node of least total cost first."""
-    "*** YOUR CODE HERE ***"
+    from util import PriorityQueue
+
+    frontier = PriorityQueue()
+    current_position = problem.getStartState()
+    visited = set()
+
+    frontier.push((0, current_position, []), 0)
+
+    while not problem.isGoalState(current_position):
+        _, current_position, current_directions = frontier.pop()
+        
+        if current_position not in visited:
+            visited.add(current_position)
+
+            for successor, direction, _ in problem.getSuccessors(current_position):
+                if successor not in visited:
+                    new_directions = current_directions + [direction]
+                    new_cost = problem.getCostOfActions(new_directions)
+                    frontier.update((new_cost, successor, new_directions), new_cost)
+
+    return current_directions
+
     util.raiseNotDefined()
+    
 
 def nullHeuristic(state, problem=None):
     """
@@ -195,7 +181,28 @@ def nullHeuristic(state, problem=None):
 
 def aStarSearch(problem, heuristic=nullHeuristic):
     """Search the node that has the lowest combined cost and heuristic first."""
-    "*** YOUR CODE HERE ***"
+    from util import PriorityQueueWithFunction
+
+    # Define the frontier with the heuristic function that includes the `problem` argument
+    frontier = PriorityQueueWithFunction(lambda node: heuristic(node[1], problem))
+    current_position = problem.getStartState()
+    visited = set()
+
+    frontier.push((0, current_position, []))
+
+    while not problem.isGoalState(current_position):
+        _, current_position, current_directions = frontier.pop()
+
+        if current_position not in visited:
+            visited.add(current_position)
+
+            for successor, direction, _ in problem.getSuccessors(current_position):
+                if successor not in visited:
+                    new_directions = current_directions + [direction]
+                    new_cost = problem.getCostOfActions(new_directions)
+                    frontier.push((new_cost, successor, new_directions))
+
+    return current_directions
     util.raiseNotDefined()
 
 

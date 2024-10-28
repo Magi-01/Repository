@@ -14,7 +14,8 @@
 
 # imports from python standard library
 import grading
-import imp
+import types
+import importlib
 import optparse
 import os
 import re
@@ -125,7 +126,7 @@ def loadModuleString(moduleSource):
     #
     #f = StringIO(moduleCodeDict[k])
     #tmp = imp.load_module(k, f, k, (".py", "r", imp.PY_SOURCE))
-    tmp = imp.new_module(k)
+    tmp = types.ModuleType(k)
     exec(moduleCodeDict[k], tmp.__dict__)
     setModuleName(tmp, k)
     return tmp
@@ -134,7 +135,7 @@ import py_compile
 
 def loadModuleFile(moduleName, filePath):
     with open(filePath, 'r') as f:
-        return imp.load_module(moduleName, f, "%s.py" % moduleName, (".py", "r", imp.PY_SOURCE))
+        return importlib.import_module(moduleName, "%s.py" % moduleName)
 
 
 def readFile(path, root=""):
