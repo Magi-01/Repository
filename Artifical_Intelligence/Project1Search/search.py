@@ -92,27 +92,22 @@ def depthFirstSearch(problem):
     """
     visited = set()  # Track fully explored nodes
     frontier = Stack()  # Stack for DFS
-    start_position = problem.getStartState()  # Starting position of Pacman
+    start_position = problem.getStartState()
     
-    # Initialize stack with the start position and an empty path
     frontier.push((start_position, []))
 
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
-        # Check if the current position is the goal; if so, return the path to reach it
-        print(f"\nCurrent Position is {current_position} and goalstate is {problem.isGoalState(current_position)}")
+        
         if problem.isGoalState(current_position):
             return current_directions
 
-        # Process current position if it hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
 
-            # Add each successor to the stack with the updated path
             for successor, direction, _ in problem.getSuccessors(current_position):
                 if successor not in visited:
-                    # Append direction to the path list for this new state
                     frontier.push((successor, current_directions + [direction]))
 
     # Return an empty path if no solution is found
