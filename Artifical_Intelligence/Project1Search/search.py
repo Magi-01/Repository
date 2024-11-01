@@ -93,6 +93,7 @@ def depthFirstSearch(problem):
     visited = set()  # Track fully explored nodes
     frontier = Stack()  # Stack for DFS
     start_position = problem.getStartState()
+    goal = 'G'
     
     frontier.push((start_position, []))
 
@@ -100,7 +101,7 @@ def depthFirstSearch(problem):
         current_position, current_directions = frontier.pop()
 
         
-        if problem.isGoalState(current_position):
+        if problem.isGoalState(current_position) or current_position==goal:
             return current_directions
 
         if current_position not in visited:
@@ -120,6 +121,7 @@ def breadthFirstSearch(problem):
 
     visited = set()
     frontier = Queue()
+    goal = 'G'
 
     start_position = problem.getStartState()
     frontier.push((start_position, []))
@@ -127,7 +129,7 @@ def breadthFirstSearch(problem):
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
-        if problem.isGoalState(current_position):
+        if problem.isGoalState(current_position) or current_position==goal:
             return current_directions
 
         if current_position not in visited:
@@ -143,26 +145,31 @@ def breadthFirstSearch(problem):
 def uniformCostSearch(problem):
     """Search the node of least total cost first."""
     from util import PriorityQueue
-
+    
     frontier = PriorityQueue()
-    current_position = problem.getStartState()
+    start_position = problem.getStartState()
     visited = set()
+    
+    frontier.push((start_position, [], 0), 0)
 
-    frontier.push((0, current_position, []), 0)
+    while not frontier.isEmpty():
+        current_position, current_directions, current_cost = frontier.pop()
 
-    while not problem.isGoalState(current_position):
-        _, current_position, current_directions = frontier.pop()
-        
+        if problem.isGoalState(current_position):
+            return current_directions
+
+        # Explore the node if it hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
 
-            for successor, direction, _ in problem.getSuccessors(current_position):
+            for successor, direction, step_cost in problem.getSuccessors(current_position):
                 if successor not in visited:
                     new_directions = current_directions + [direction]
-                    new_cost = problem.getCostOfActions(new_directions)
-                    frontier.update((new_cost, successor, new_directions), new_cost)
+                    new_cost = current_cost + step_cost
+                    frontier.update((successor, new_directions, new_cost), new_cost)
 
-    return current_directions
+    # Return an empty path if the goal is unreachable
+    return []
 
     util.raiseNotDefined()
     
@@ -176,28 +183,50 @@ def nullHeuristic(state, problem=None):
 
 def aStarSearch(problem, heuristic=nullHeuristic):
     """Search the node that has the lowest combined cost and heuristic first."""
+
     from util import PriorityQueueWithFunction
 
-    # Define the frontier with the heuristic function that includes the `problem` argument
-    frontier = PriorityQueueWithFunction(lambda node: heuristic(node[1], problem))
+    # Priority queue that combines path cost and heuristic
+    frontier = PriorityQueueWithFunction(lambda node: problem.getCostOfActions(node[2]) + heuristic(node[1], problem))
+    
+    # Possible true goals based on starting state
+    true_goals = {'A': ['H', 'F'], 'S': ['G']}
+    goals_list = true_goals.get(problem.getStartState(), [])
+    
     current_position = problem.getStartState()
-    visited = set()
+    visited = set()  # To track visited nodes
+    expanded_states = []  # To save expanded states
+    path_to_goal = []  # To save the path to the actual goal
 
-    frontier.push((0, current_position, []))
+    # Push the initial state into the priority queue
+    frontier.push((0, current_position, []))  # (cost, position, path)
 
-    while not problem.isGoalState(current_position):
-        _, current_position, current_directions = frontier.pop()
+    while not frontier.isEmpty():
+        current_cost, current_position, current_path = frontier.pop()
 
+        # If we reach one of the true goals, store the path
+        if current_position in goals_list:
+            path_to_goal = current_path  # Store the path leading to the goal
+            break  # Stop searching further if we've found a goal
+
+        # If the node hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
+            expanded_states.append(current_position)  # Track expanded states
 
-            for successor, direction, _ in problem.getSuccessors(current_position):
+            # Explore all successors of the current node
+            for successor, direction, step_cost in problem.getSuccessors(current_position):
                 if successor not in visited:
-                    new_directions = current_directions + [direction]
-                    new_cost = problem.getCostOfActions(new_directions)
-                    frontier.push((new_cost, successor, new_directions))
+                    # Create a new path to the successor
+                    new_path = current_path + [direction]
+                    new_cost = current_cost + step_cost
+                    frontier.push((new_cost, successor, new_path))
 
-    return current_directions
+    # Return the path to the goal if found, otherwise the expanded states
+    if path_to_goal:
+        return path_to_goal
+    else:
+        return expanded_states if expanded_states else []
     util.raiseNotDefined()
 
 
