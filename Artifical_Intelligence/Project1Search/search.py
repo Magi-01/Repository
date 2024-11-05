@@ -90,18 +90,16 @@ def depthFirstSearch(problem):
     """
     Performs Depth-First Search (DFS) to find a solution path to the goal.
     """
-    visited = set()  # Track fully explored nodes
+    visited = set()
     frontier = Stack()  # Stack for DFS
     start_position = problem.getStartState()
-    goal = 'G'
     
     frontier.push((start_position, []))
 
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
-        
-        if problem.isGoalState(current_position) or current_position==goal:
+        if problem.isGoalState(current_position):
             return current_directions
 
         if current_position not in visited:
@@ -121,7 +119,6 @@ def breadthFirstSearch(problem):
 
     visited = set()
     frontier = Queue()
-    goal = 'G'
 
     start_position = problem.getStartState()
     frontier.push((start_position, []))
@@ -129,7 +126,7 @@ def breadthFirstSearch(problem):
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
-        if problem.isGoalState(current_position) or current_position==goal:
+        if problem.isGoalState(current_position):
             return current_directions
 
         if current_position not in visited:
@@ -189,14 +186,10 @@ def aStarSearch(problem, heuristic=nullHeuristic):
     # Priority queue that combines path cost and heuristic
     frontier = PriorityQueueWithFunction(lambda node: problem.getCostOfActions(node[2]) + heuristic(node[1], problem))
     
-    # Possible true goals based on starting state
-    true_goals = {'A': ['H', 'F'], 'S': ['G']}
-    goals_list = true_goals.get(problem.getStartState(), [])
-    
     current_position = problem.getStartState()
-    visited = set()  # To track visited nodes
-    expanded_states = []  # To save expanded states
-    path_to_goal = []  # To save the path to the actual goal
+    current_path = []
+    visited = set()
+    expanded_states = []
 
     # Push the initial state into the priority queue
     frontier.push((0, current_position, []))  # (cost, position, path)
@@ -204,15 +197,14 @@ def aStarSearch(problem, heuristic=nullHeuristic):
     while not frontier.isEmpty():
         current_cost, current_position, current_path = frontier.pop()
 
-        # If we reach one of the true goals, store the path
-        if current_position in goals_list:
-            path_to_goal = current_path  # Store the path leading to the goal
-            break  # Stop searching further if we've found a goal
+        # checks if the current postion is the goal state
+        if problem.isGoalState(current_position):
+            return current_path
 
         # If the node hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
-            expanded_states.append(current_position)  # Track expanded states
+            expanded_states.append(current_position)
 
             # Explore all successors of the current node
             for successor, direction, step_cost in problem.getSuccessors(current_position):
@@ -221,12 +213,8 @@ def aStarSearch(problem, heuristic=nullHeuristic):
                     new_path = current_path + [direction]
                     new_cost = current_cost + step_cost
                     frontier.push((new_cost, successor, new_path))
-
-    # Return the path to the goal if found, otherwise the expanded states
-    if path_to_goal:
-        return path_to_goal
-    else:
-        return expanded_states if expanded_states else []
+    
+    return []
     util.raiseNotDefined()
 
 

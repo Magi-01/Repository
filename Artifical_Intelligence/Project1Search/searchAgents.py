@@ -355,35 +355,34 @@ def cornersHeuristic(state, problem):
     corners = problem.corners # These are the corner coordinates
     walls = problem.walls # These are the walls of the maze, as a Grid (game.py)
 
-    current_position = state[0]
+    "*** YOUR CODE HERE ***"
+    from util import manhattanDistance
+
+    position = state[0]
     visited_corners = state[1]
 
     unvisited_corners = [corner for corner in corners if corner not in visited_corners]
     
-    # If all corners are visited, no cost remains
+    # Trivial Case
     if not unvisited_corners:
         return 0
 
     heuristic = 0
-    position = current_position
-    
+
     while unvisited_corners:
-        # Calculate both Manhattan and Euclidean distances to each unvisited corner
+        # List containing Total distance from postion to all corners
         distances = [
-            (
-                0.5 * (abs(position[0] - corner[0]) + abs(position[1] - corner[1])) + 
-                0.5 * ((position[0] - corner[0]) ** 2 + (position[1] - corner[1]) ** 2)**0.5, 
-                corner
-            )
+            (manhattanDistance(position, corner), corner)
             for corner in unvisited_corners
         ]
         
-        # Find the closest corner based on the hybrid distance
+        # Find the closest corner
         min_distance, nearest_corner = min(distances)
-        
-        # Add this hybrid distance to the heuristic
+
+        # Add the distance to the heuristic
         heuristic += min_distance
-        position = nearest_corner  # Update the current position to the nearest corner
+        # Update the current position to the nearest corner
+        position = nearest_corner
         
         # Remove the visited corner from the list of unvisited corners
         unvisited_corners.remove(nearest_corner)
@@ -482,7 +481,46 @@ def foodHeuristic(state, problem):
     """
     position, foodGrid = state
     "*** YOUR CODE HERE ***"
-    return 0
+    food_list = foodGrid.asList()
+
+    # Trivial Case
+    if position in food_list:
+        return 0
+    
+    heuristic = 0
+    gamestate = problem.startingGameState
+
+    # Sets the heuristic such that the shotest path is to the closest food
+    for food in food_list:
+        dist = mazeDistance(position, food, gamestate)
+        if dist > heuristic:
+            heuristic = dist
+
+    # Runs for a shorter amount of time but has 2000+ more expantions
+    """
+    position = position
+    while food_list:
+        
+        distances = [
+            (
+                ((position[0] - food[0])**2 + (position[1] - food[1])**2)**0.5, 
+                food
+            )
+            # Euclidean distance expands less than manhattan
+            for food in food_list
+        ]
+        
+        # Find the closest corner based on the hybrid distance
+        min_distance, nearest_corner = min(distances)
+        
+        # Add this hybrid distance to the heuristic
+        heuristic += min_distance
+        position = nearest_corner
+        
+        # Remove the visited corner from the list of unvisited corners
+        food_list.remove(nearest_corner)"""
+        
+    return heuristic
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
@@ -513,6 +551,7 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
+        return search.astar(problem)
         util.raiseNotDefined()
 
 class AnyFoodSearchProblem(PositionSearchProblem):
@@ -549,6 +588,7 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
+        return self.food[x][y] is True
         util.raiseNotDefined()
 
 def mazeDistance(point1, point2, gameState):
