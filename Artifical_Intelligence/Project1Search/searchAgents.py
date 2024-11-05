@@ -490,6 +490,8 @@ def foodHeuristic(state, problem):
     heuristic = 0
     gamestate = problem.startingGameState
 
+    print(problem)
+
     # Sets the heuristic such that the shotest path is to the closest food
     for food in food_list:
         dist = mazeDistance(position, food, gamestate)
@@ -551,6 +553,7 @@ class ClosestDotSearchAgent(SearchAgent):
         problem = AnyFoodSearchProblem(gameState)
 
         "*** YOUR CODE HERE ***"
+        # Gets direction to Food through the normal atar search function in search.py
         return search.astar(problem)
         util.raiseNotDefined()
 
@@ -588,6 +591,7 @@ class AnyFoodSearchProblem(PositionSearchProblem):
         x,y = state
 
         "*** YOUR CODE HERE ***"
+        # Checks if the position is True the return True, False otherwise
         return self.food[x][y] is True
         util.raiseNotDefined()
 

@@ -93,20 +93,25 @@ def depthFirstSearch(problem):
     visited = set()
     frontier = Stack()  # Stack for DFS
     start_position = problem.getStartState()
-    
-    frontier.push((start_position, []))
+
+    # Push the initial state into the Stack    
+    frontier.push((start_position, [])) # (position, path)
 
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
+        # checks if the current postion is the goal state
         if problem.isGoalState(current_position):
             return current_directions
 
+        # If the node hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
 
+            # Explore all successors of the current node
             for successor, direction, _ in problem.getSuccessors(current_position):
                 if successor not in visited:
+                    # Create a new path to the successor
                     frontier.push((successor, current_directions + [direction]))
 
     # Return an empty path if no solution is found
@@ -118,22 +123,27 @@ def breadthFirstSearch(problem):
     from util import Queue
 
     visited = set()
-    frontier = Queue()
-
+    frontier = Queue() # Queue for BFS
     start_position = problem.getStartState()
-    frontier.push((start_position, []))
+
+    # Push the initial state into the Queue
+    frontier.push((start_position, [])) # (position, path)
 
     while not frontier.isEmpty():
         current_position, current_directions = frontier.pop()
 
+        # checks if the current postion is the goal state
         if problem.isGoalState(current_position):
             return current_directions
 
+        # If the node hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
 
+            # Explore all successors of the current node
             for successor, direction, _ in problem.getSuccessors(current_position):
                 if successor not in visited:
+                    # Create a new path to the successor
                     frontier.push((successor, current_directions + [direction]))
 
     return []
@@ -142,25 +152,30 @@ def breadthFirstSearch(problem):
 def uniformCostSearch(problem):
     """Search the node of least total cost first."""
     from util import PriorityQueue
-    
+
+    # Priority queue for UCS
     frontier = PriorityQueue()
     start_position = problem.getStartState()
     visited = set()
     
-    frontier.push((start_position, [], 0), 0)
+    # Push the initial state into the priority queue
+    frontier.push((start_position, [], 0), 0) # (cost, position, path)
 
     while not frontier.isEmpty():
         current_position, current_directions, current_cost = frontier.pop()
 
+        # checks if the current postion is the goal state
         if problem.isGoalState(current_position):
             return current_directions
 
-        # Explore the node if it hasn't been visited yet
+        # If the node hasn't been visited yet
         if current_position not in visited:
             visited.add(current_position)
 
+            # Explore all successors of the current node
             for successor, direction, step_cost in problem.getSuccessors(current_position):
                 if successor not in visited:
+                    # Create a new path to the successor
                     new_directions = current_directions + [direction]
                     new_cost = current_cost + step_cost
                     frontier.update((successor, new_directions, new_cost), new_cost)
@@ -213,7 +228,8 @@ def aStarSearch(problem, heuristic=nullHeuristic):
                     new_path = current_path + [direction]
                     new_cost = current_cost + step_cost
                     frontier.push((new_cost, successor, new_path))
-    
+
+    # Return an empty path if the goal is unreachable    
     return []
     util.raiseNotDefined()
 
