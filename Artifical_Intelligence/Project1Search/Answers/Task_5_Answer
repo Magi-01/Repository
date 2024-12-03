@@ -1,2 +1,0 @@
-bfs, ucs and astar take a direct approach to the Food with the same path cost of 54 but with 682, 682 and 535 nodes expanded respectively.
-dfs on the other hand does a horizontal scan of the entire Grid and thus having a path cost of 298 but with a node expansion of 576.
