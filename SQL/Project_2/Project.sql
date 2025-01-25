@@ -1,7 +1,7 @@
 drop database Aisle_Management;
+
 CREATE DATABASE Aisle_Management;
 Use Aisle_Management;
-
 #--------------------------------#
 -- For Tables
 #--------------------------------#
