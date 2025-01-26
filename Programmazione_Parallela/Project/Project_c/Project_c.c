@@ -1,20 +1,22 @@
-#include "scene.h"  // Include scene.h, which already includes calculations.h
 #include "ppm.h"
+#include "scene.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 int main() {
-    const char *file_path = "./3d_image.ppm";
+    const char *file_path = "./to_be_raytraced.txt";  // Use the correct file path for your input
 
-    Sphere spheres[] = {
-        {{0.0f, 0.0f, 3.0f}, 1.0f}, // Sphere 1
-        {{2.0f, 0.0f, 4.0f}, 1.0f}  // Sphere 2
-    };
+    // Parse the PPM file and store the data in an image structure
+    PPMImage image = parse_ppm(file_path);
 
-    PPMImage *image = pixel_parse(file_path); // Load the image
+    // Render the scene based on the parsed data
+    render_scene(&image);
 
-    render_scene(image, spheres, 2); // Render the scene
+    // Save the rendered image to a file
+    save_ppm_image("output.ppm", &image);
 
-    free_ppm(image); // Free allocated memory
+    // Free dynamically allocated memory for spheres
+
     return 0;
 }

@@ -3,17 +3,27 @@
 
 #include <stdint.h>
 
-// Define the PPMImage structure
+typedef struct {
+    float center[3];   // Sphere position (x, y, z)
+    float radius;        // Radius of the sphere
+    uint8_t color[3];    // Color of the sphere (RGB format)
+} Sphere;
+
+
+// Define the PPMImage structure with packed attribute
 typedef struct __attribute__((packed)) {
-    char magic_number[2]; // PPM format identifier (e.g., "P6")
-    uint32_t width;       // Image width
-    uint32_t height;      // Image height
-    uint32_t max_color;   // Max color intensity
-    uint8_t *data;        // Pointer to pixel data (RGB format)
+    char magic_number[2]; // PPM format identifier, e.g., "P6"
+    uint32_t viewport[3]; // Viewport size (x, y, z)
+    uint32_t background[3]; // Background color (RGB)
+    uint32_t OBJ_N; // Number of objects (spheres)
+    Sphere *spheres; // Array of spheres
+    uint32_t *data;
 } PPMImage;
 
-PPMImage *pixel_parse(file_path);
+// Function to parse the PPM file
+PPMImage parse_ppm(const char *file_path);
 
-void free_ppm(image);
+// Function to save the PPM image to a file
+void save_ppm_image(const char *file_path, PPMImage *image);
 
 #endif

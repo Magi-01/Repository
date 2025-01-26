@@ -1,15 +1,16 @@
 #ifndef CALCULATIONS_H
 #define CALCULATIONS_H
 
-#include <math.h> // For mathematical operations
+#include <stdint.h>
 #include "ppm.h"
 
-void viewport_mapping(float x_screen, float y_screen, float *viewport_coords, uint32_t width, uint32_t height);
+// Function to normalize a ray direction
+void normalize_ray(float *ray);
 
-int ray_sphere_intersection(float *origin, float *direction, Sphere sphere, float *t);
+// Function to find intersections with spheres
+int intersections(PPMImage *image, float *origin, int num_spheres, float *direction, Sphere *spheres, uint32_t x, uint32_t y, uint32_t *color);
 
-float* normalize_ray(float* direction);
-
-void intersections(float* origin, int num_spheres, float *direction, Sphere spheres);
+// Function to map pixel coordinates to viewport coordinates
+void viewport_mapping(float x_pixel, float y_pixel, float *viewport_coords, PPMImage *image);
 
 #endif
