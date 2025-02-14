@@ -22,3 +22,5 @@ COUNT   DAT          // Counter (defaults to 0)
 ONE     DAT 1        // Constant, value of 1
 VALUE   DAT          // User provided input, the value to be squared (defaults to 0)
 ZERO    DAT          // Constant, value of 0 (defaults to 0)
+
+
