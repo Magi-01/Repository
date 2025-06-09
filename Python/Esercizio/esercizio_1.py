@@ -1,7 +1,6 @@
 import datetime
 import matplotlib.pyplot as plt
 import random
-
 class DataConstuct:
     def __init__(self):
         self.a = -1
@@ -50,4 +49,4 @@ for item in a:
 plt.plot(epoch_1, color='tab:red')
 plt.plot(a,color='tab:blue')
 plt.plot()
-plt.show()
+plt.savefig("plot.png")
