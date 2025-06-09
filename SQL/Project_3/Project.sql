@@ -1,4 +1,4 @@
-drop database Aisle_Management;
+#drop database Aisle_Management;
 
 CREATE DATABASE Aisle_Management;
 Use Aisle_Management;
@@ -7,72 +7,82 @@ Use Aisle_Management;
 -- For Tables
 #--------------------------------#
 
--- Create Aisle table
+-- Create SuperMarket table
+CREATE TABLE SuperMarket (
+    SuperMarketID INT PRIMARY KEY,
+    SuperMarketName VARCHAR(255) NOT NULL,
+    SuperMarketLocation VARCHAR(255) NOT NULL
+);
+
+-- Create SuperMarket table
 CREATE TABLE Aisle (
     AisleID INT PRIMARY KEY,
-    Name VARCHAR(255) NOT NULL
+    SuperMarketID INT NOT NULL,
+    AisleName VARCHAR(255) NOT NULL,
+    FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
+);
+
+-- Create Producer table
+CREATE TABLE Producer (
+    ProducerID INT PRIMARY KEY,
+    ProducerName VARCHAR(255) NOT NULL,
+    ProducerLocation VARCHAR(255) NOT NULL
 );
 
 -- Create Item table
 CREATE TABLE Item (
-    ItemID INT PRIMARY KEY auto_increment,
-    Name VARCHAR(255) NOT NULL,
-    Category VARCHAR(255),
-    StorageType VARCHAR(255),
-    ExpirationDate DATE
+    ItemID INT PRIMARY KEY,
+    ItemName VARCHAR(255) NOT NULL,
+    ItemCategory VARCHAR(255),
+    ItemStorageType VARCHAR(255),
+    ItemPerishable BOOLEAN,
+    ItemExpirationDate DATE
 );
 
--- Create Company table
-CREATE TABLE Company (
-    CompanyID INT PRIMARY KEY,
-    Name VARCHAR(255) NOT NULL,
-    Email VARCHAR(255),
-    Location VARCHAR(255)
+-- Create Distance table
+CREATE TABLE Distance (
+    ProducerID INT NOT NULL,
+    SuperMarketID INT NOT NULL,
+    Distance FLOAT,
+    PRIMARY KEY (ProducerID, SuperMarketID),
+    FOREIGN KEY (ProducerID) REFERENCES Producer(ProducerID),
+    FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
 );
 
--- Create the Contains Table
-CREATE TABLE Contains (
-    AisleID INT NOT NULL auto_increment,
+-- Create the Contain Table
+CREATE TABLE Contain (
+    AisleID INT NOT NULL,
     ItemID INT NOT NULL,
+    SuperMarketID INT NOT NULL,
     PRIMARY KEY (AisleID, ItemID),
     FOREIGN KEY (AisleID) REFERENCES Aisle(AisleID),
-    FOREIGN KEY (ItemID) REFERENCES Item(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
+    FOREIGN KEY (SuperMarketID) REFERENCES Aisle(SuperMarketID)
 );
 
 -- Create the Manufactured_By Table
 CREATE TABLE Manufactured_By (
-    ItemID INT NOT NULL auto_increment,
-    CompanyID INT NOT NULL,
-    PRIMARY KEY (ItemID, CompanyID),
+    ItemID INT NOT NULL,
+    ProducerID INT NOT NULL,
+    PRIMARY KEY (ItemID, ProducerID),
     FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
-    FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID)
+    FOREIGN KEY (ProducerID) REFERENCES Producer(ProducerID)
 );
 
--- Create ErrorMessages table
+-- Create ItemLogErrors table
 CREATE TABLE ErrorMessages (
     ErrorID INT PRIMARY KEY auto_increment,
-    ErrorMessage VARCHAR(255) NOT NULL
-);
-
--- Create ItemLog table
-CREATE TABLE ItemLog (
-    LogID INT PRIMARY KEY auto_increment,
-    ItemID INT,
-    CompanyID INT,
-    LogTime DATETIME,
-    ErrorID INT,
-    FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
-    FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID),
-    FOREIGN KEY (ErrorID) REFERENCES ErrorMessages(ErrorID)
+    ErrorMessage VARCHAR(255) UNIQUE
 );
 
 -- Create ItemLogErrors table
 CREATE TABLE ItemLogErrors (
     LogID INT PRIMARY KEY auto_increment,
-    ItemID INT,
-    AisleID INT,
-    LogTime DATETIME,
+    ItemID INT Not NULL,
+    AisleID INT Not NULL,
     ErrorID INT,
+    LogTime DATETIME,
+    ToBeThrown BOOLEAN NOT NULL DEFAULT TRUE,
     FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
     FOREIGN KEY (AisleID) REFERENCES Aisle(AisleID),
     FOREIGN KEY (ErrorID) REFERENCES ErrorMessages(ErrorID)
@@ -85,15 +95,16 @@ CREATE TABLE ItemLogErrors (
 
 
 DELIMITER $$
+
 CREATE TRIGGER trg_check_item_aisle_count
-BEFORE INSERT ON Contains
+BEFORE INSERT ON Contain
 FOR EACH ROW
 BEGIN
     DECLARE aisle_count INT;
 
     -- Check if the ItemID already exists in another aisle (excluding the same aisle)
     SELECT COUNT(*) INTO aisle_count
-    FROM Contains
+    FROM Contain
     WHERE ItemID = NEW.ItemID AND AisleID != NEW.AisleID;
 
     -- If the item already exists in another aisle, raise an error
@@ -102,29 +113,17 @@ BEGIN
         SET MESSAGE_TEXT = 'An item can only belong to one aisle.';
     END IF;
 END$$
+
 DELIMITER ;
 
 
 DELIMITER $$
-CREATE TRIGGER EnsureSingleManufacturer
-BEFORE INSERT ON Manufactured_By
-FOR EACH ROW
-BEGIN
-    -- Check if the ItemID already exists in the Manufactured_By table
-    IF EXISTS (
-        SELECT 1
-        FROM Manufactured_By
-        WHERE ItemID = NEW.ItemID
-    ) THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Each Item can only be manufactured by one Company.';
-    END IF;
-END$$
-DELIMITER ;
 
-
-DELIMITER $$
-CREATE FUNCTION fn_validate_aisle_compliance(item_id INT, aisle_id INT)
+CREATE FUNCTION fn_validate_aisle_compliance(
+    item_id INT,
+    aisle_id INT,
+    supermarket_id INT
+)
 RETURNS VARCHAR(255)
 DETERMINISTIC
 BEGIN
@@ -133,67 +132,71 @@ BEGIN
     DECLARE error_message VARCHAR(255);
 
     -- Fetch storage type and category
-    SELECT StorageType, Category INTO item_storage_type, item_category
+    SELECT ItemStorageType, ItemCategory
+    INTO item_storage_type, item_category
     FROM Item
     WHERE ItemID = item_id;
 
-    -- Initialize error message
     SET error_message = NULL;
 
-    -- Validate based on storage type and category
     CASE
-        -- Frozen storage type validation
         WHEN item_storage_type = 'Frozen' AND
-             (aisle_id <> (SELECT AisleID FROM Aisle WHERE Name = 'Frozen') OR
-              item_category NOT IN ('Frozen', 'Fresh Meat')) THEN
+             (
+               aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Frozen' AND SuperMarketID = supermarket_id LIMIT 1)
+               OR
+               item_category NOT IN ('Frozen', 'Fresh Meat')
+             )
+        THEN
             SET error_message = CONCAT(item_category, ' items with Frozen storage must be placed in the Frozen aisle.');
 
-        -- Refrigerated storage type validation
         WHEN item_storage_type = 'Refrigerated' AND
              item_category IN ('Baked', 'Fresh Meat', 'Beverages') AND
-             aisle_id <> (SELECT AisleID FROM Aisle WHERE Name = 'Refrigerated') THEN
+             aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Refrigerated' AND SuperMarketID = supermarket_id LIMIT 1)
+        THEN
             SET error_message = CONCAT(item_category, ' items with Refrigerated storage must be placed in the Refrigerated aisle.');
 
-        -- Ambient storage type validation
         WHEN item_storage_type = 'Ambient' AND
-             item_category IN ('Refrigerated', 'Frozen') THEN
+             item_category IN ('Refrigerated', 'Frozen')
+        THEN
             SET error_message = CONCAT(item_category, ' items cannot have Ambient storage type.');
 
-        -- Vegetables validation
         WHEN item_category = 'Vegetables' AND
-             aisle_id IN (SELECT AisleID FROM Aisle WHERE Name IN ('Frozen', 'Refrigerated')) THEN
+             aisle_id IN (SELECT AisleID FROM Aisle WHERE AisleName IN ('Frozen', 'Refrigerated') AND SuperMarketID = supermarket_id)
+        THEN
             SET error_message = 'Vegetables cannot be placed in Frozen or Refrigerated aisles.';
 
-        -- Kitchenware validation
         WHEN item_category = 'Kitchenware' AND
-             aisle_id <> (SELECT AisleID FROM Aisle WHERE Name = 'Kitchenware') THEN
+             aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Kitchenware' AND SuperMarketID = supermarket_id LIMIT 1)
+        THEN
             SET error_message = 'Kitchenware items must be placed in the Kitchenware aisle.';
 
-        -- Pet Food validation
         WHEN item_category = 'Pet Food' AND
-             aisle_id NOT IN (SELECT AisleID FROM Aisle WHERE Name IN ('Pet Food', 'Pharmacy')) THEN
+             aisle_id NOT IN (SELECT AisleID FROM Aisle WHERE AisleName IN ('Pet Food', 'Pharmacy') AND SuperMarketID = supermarket_id)
+        THEN
             SET error_message = 'Pet Food must be placed in the Pet Food or Pharmacy aisle.';
 
-        -- Dry Food, Baked, Beverages, and Snacks validation
         WHEN item_category IN ('Baked', 'Beverages') AND
-             item_storage_type = 'Frozen' THEN
+             item_storage_type = 'Frozen'
+        THEN
             SET error_message = CONCAT(item_category, ' items cannot be stored in Frozen aisles.');
 
-        WHEN item_category in ('Dry Food', 'Snacks') AND item_storage_type
-                in ('Frozen', 'Refrigerated') THEN
+        WHEN item_category IN ('Dry Food', 'Snacks') AND
+             item_storage_type IN ('Frozen', 'Refrigerated')
+        THEN
             SET error_message = CONCAT(item_category, ' items cannot be stored in Frozen/Refrigerated aisles.');
 
-        -- Catch-all for unexpected cases
         ELSE
             SET error_message = NULL;
     END CASE;
 
     RETURN error_message;
 END$$
+
 DELIMITER ;
 
 
 DELIMITER $$
+
 CREATE FUNCTION fn_suggest_correct_aisle(item_id INT)
 RETURNS INT
 DETERMINISTIC
@@ -203,37 +206,38 @@ BEGIN
     DECLARE suggested_aisle INT;
 
     -- Fetch storage type and category
-    SELECT StorageType, Category INTO item_storage_type, item_category
+    SELECT ItemStorageType, ItemCategory INTO item_storage_type, item_category
     FROM Item
     WHERE ItemID = item_id;
 
     -- Determine the correct aisle
     CASE
         WHEN item_storage_type = 'Frozen' THEN
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name = 'Frozen';
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName = 'Frozen';
         WHEN item_storage_type = 'Refrigerated' THEN
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name = 'Refrigerated';
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName = 'Refrigerated';
         WHEN item_category = 'Vegetables' THEN
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name = 'Vegetables';
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName = 'Vegetables';
         WHEN item_category = 'Kitchenware' THEN
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name = 'Kitchenware';
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName = 'Kitchenware';
         WHEN item_category = 'Pet Food' THEN
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name IN ('Pet Food', 'Pharmacy') LIMIT 1;
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName IN ('Pet Food', 'Pharmacy') LIMIT 1;
         ELSE
-            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE Name = 'Ambient';
+            SELECT AisleID INTO suggested_aisle FROM Aisle WHERE AisleName = 'Ambient';
     END CASE;
 
     RETURN suggested_aisle;
 END$$
+
 DELIMITER ;
 
 
 DELIMITER $$
-CREATE PROCEDURE pr_insert_item_log(item_id INT, aisle_id INT, error_message VARCHAR(255))
+
+CREATE PROCEDURE pr_insert_item_log(item_id INT, aisle_id INT, error_id INT)
 BEGIN
-    -- Insert the log entry into the ItemLog table
     INSERT INTO ItemLogErrors (ItemID, AisleID, LogTime, ErrorID)
-    VALUES (item_id, aisle_id, NOW(),error_message);
+    VALUES (item_id, aisle_id, NOW(), error_id);
 END$$
 DELIMITER ;
 
@@ -244,45 +248,90 @@ RETURNS INT
 DETERMINISTIC
 BEGIN
     DECLARE error_id INT;
-    -- Insert the log entry into the ItemLog table
-   IF NOT EXISTS (
-            SELECT 1
-            FROM ErrorMessages
-            WHERE ErrorMessage = error_message
-        ) THEN
-            -- If not, insert the error message into the ErrorMessages table
-            INSERT INTO ErrorMessages (ErrorMessage)
-            VALUES (error_message);
-        END IF;
-    select ErrorID into error_id
-        from ErrorMessages
-        where ErrorMessage = error_message;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM ErrorMessages WHERE ErrorMessage = error_message
+    ) THEN
+        INSERT INTO ErrorMessages (ErrorMessage)
+        VALUES (error_message);
+    END IF;
+
+    SELECT ErrorID INTO error_id
+    FROM ErrorMessages
+    WHERE ErrorMessage = error_message;
+
     RETURN error_id;
 END$$
+
 DELIMITER ;
 
 
 DELIMITER $$
+
 CREATE TRIGGER trg_log_item_wrong_aisle
-AFTER INSERT ON Contains
+AFTER INSERT ON Contain
 FOR EACH ROW
 BEGIN
     DECLARE error_message VARCHAR(255);
     DECLARE error_id INT;
 
-    -- Call the validation function to check compliance
-    set error_message = fn_validate_aisle_compliance(NEW.ItemID, NEW.AisleID);
+    -- Pass SuperMarketID now
+    SET error_message = fn_validate_aisle_compliance(NEW.ItemID, NEW.AisleID, NEW.SuperMarketID);
 
-    -- If non-compliant, suggest correct aisle, log the error, and reject the insertion
     IF error_message IS NOT NULL THEN
-        -- Call the suggestion function to get the correct aisle
-
         SET error_id = fn_insert_into_error_message(error_message);
-        -- Call the insertion procedure to log the incorrect insertion
-        CALL pr_insert_item_log(NEW.ItemID,NEW.AisleID, error_id);
-
+        CALL pr_insert_item_log(NEW.ItemID, NEW.AisleID, error_id);
     END IF;
 END$$
+
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER ReturnItem
+AFTER INSERT ON Contain
+FOR EACH ROW
+BEGIN
+    DECLARE maxdistance FLOAT;
+    DECLARE checknexpiry DATE;
+    DECLARE nexpiry BOOLEAN;
+    DECLARE nproducerid INT;
+    DECLARE nsupermarketid INT;
+    DECLARE nerrorid INT;
+    DECLARE ndistance FLOAT;
+    DECLARE nperishable BOOLEAN;
+    DECLARE error_message VARCHAR(255);
+
+    maxdistance = 7
+
+    SELECT SuperMarketID INTO nsupermarketid FROM Aisle WHERE AisleID = NEW.AisleID LIMIT 1;
+
+    SELECT ProducerID INTO nproducerid FROM manufactured_by WHERE ItemID = NEW.ItemID LIMIT 1;
+
+    SELECT Distance INTO ndistance FROM Distance WHERE SuperMarketID = nsupermarketid AND ProducerID = nproducerid LIMIT 1;
+
+    SELECT ItemPerishable, ItemExpirationDate INTO nperishable, checknexpiry FROM Item WHERE ItemID = NEW.ItemID;
+
+    SET nexpiry = (checknexpiry < NOW());
+
+    IF nexpiry THEN
+        IF ndistance <= maxdistance OR nperishable = 0 THEN
+            SET error_message = "Expired but returnable due to being non perishable or short distance to producer";
+            SET nerrorid = fn_insert_into_error_message(error_message);
+
+            INSERT INTO ItemLogErrors(ItemID, AisleID, ErrorID, LogTime, ToBeThrown)
+            VALUES (NEW.ItemID, NEW.AisleID, nerrorid, NOW(), FALSE);
+
+        ELSE
+            SET error_message = "Expired and to be thrown away";
+            SET nerrorid = fn_insert_into_error_message(error_message);
+
+            INSERT INTO ItemLogErrors(ItemID, AisleID, ErrorID, LogTime, ToBeThrown)
+            VALUES (NEW.ItemID, NEW.AisleID, nerrorid, NOW(), TRUE);
+        END IF;
+    END IF;
+END$$
+
 DELIMITER ;
 
 
@@ -290,142 +339,107 @@ DELIMITER ;
 -- For Insertions
 #--------------------------------#
 
-INSERT INTO Aisle (AisleID, Name)
-VALUES
-    (1, 'Vegetables'),
-    (2, 'Dry Food'),
-    (3, 'Fresh Meat'),
-    (4, 'Baked'),
-    (5, 'Kitchenware'),
-    (6, 'Pharmacy'),
-    (7, 'Pet Food'),
-    (8, 'Frozen'),
-    (9, 'Refrigerated'),
-    (10, 'Beverages'),
-    (11, 'Snacks');
+INSERT INTO SuperMarket (SuperMarketID, SuperMarketName, SuperMarketLocation)
+VALUES 
+(1, 'FreshMart', 'Downtown'),
+(2, 'GreenGrocer', 'Uptown');
 
-INSERT INTO Company (CompanyID, Name,Email, Location)
-VALUES
-    (1, 'Fresh Farms', 'company1@blabla.bla', 'France'),
-    (2, 'Dry Goods Co.', 'company2@blabla.bla', 'Germany'),
-    (3, 'Meat Masters', 'company3@blabla.bla', 'Italy'),
-    (4, 'Bakers Delight', 'company4@blabla.bla', 'Spain'),
-    (5, 'KitchenPro', 'company5@blabla.bla', 'Netherlands');
+INSERT INTO Aisle (AisleID, SuperMarketID, AisleName)
+VALUES 
+-- For FreshMart
+(1, 1, 'Frozen'),
+(2, 1, 'Refrigerated'),
+(3, 1, 'Ambient'),
+(4, 1, 'Vegetables'),
+(5, 1, 'Kitchenware'), -- For GreenGrocer
+(6, 2, 'Frozen'),
+(7, 2, 'Refrigerated'),
+(8, 2, 'Ambient'),
+(9, 2, 'Pet Food'),
+(10, 2, 'Pharmacy');
 
-INSERT INTO Item (Name, Category, StorageType, ExpirationDate)
-VALUES
-    -- Aisle 1: Vegetables
-    ('Lettuce', 'Vegetables', 'Ambient', '2025-01-20 12:00:00'),
-    ('Tomatoes', 'Vegetables', 'Ambient', '2025-01-22 12:00:00'),
-    ('Potatoes', 'Vegetables', 'Ambient', '2025-02-01 12:00:00'),
+INSERT INTO Producer (ProducerID, ProducerName, ProducerLocation)
+VALUES 
+(1, 'FarmFresh Co.', 'Valley Farm'),
+(2, 'CoolDairy Ltd.', 'Mountain Dairy'),
+(3, 'SnackWorld Inc.', 'City Snacks Hub');
 
-    -- Aisle 2: Dry Food
-    ('Sugar', 'Dry Food', 'Ambient', '2025-12-31 12:00:00'),
-    ('Coffee', 'Dry Food', 'Ambient', '2026-01-15 12:00:00'),
-    ('Flour', 'Dry Food', 'Ambient', '2025-11-30 12:00:00'),
+INSERT INTO Item (ItemID, ItemName, ItemCategory, ItemStorageType, ItemPerishable, ItemExpirationDate)
+VALUES 
+(1, 'Chicken Breast', 'Fresh Meat', 'Frozen', TRUE, '2025-06-01'),
+(2, 'Milk', 'Beverages', 'Refrigerated', TRUE, '2025-05-30'),
+(3, 'Frozen Pizza', 'Frozen', 'Frozen', TRUE, '2025-12-31'),
+(4, 'Lettuce', 'Vegetables', 'Ambient', TRUE, '2025-05-28'),
+(5, 'Dog Food', 'Pet Food', 'Ambient', FALSE, NULL),
+(6, 'Canned Beans', 'Dry Food', 'Ambient', FALSE, NULL),
+(7, 'Soda', 'Beverages', 'Refrigerated', FALSE, '2026-01-01'),
+(8, 'Knife Set', 'Kitchenware', 'Ambient', FALSE, NULL),
+(9, 'Ice Cream', 'Frozen', 'Frozen', TRUE, '2025-08-15'),
+(10, 'Cookies', 'Snacks', 'Ambient', FALSE, '2026-03-10');
 
-    -- Aisle 3: Fresh Meat
-    ('Beef', 'Fresh Meat', 'Ambient', '2025-01-19 12:00:00'),
-    ('Lamb', 'Fresh Meat', 'Ambient', '2025-01-20 12:00:00'),
-    ('Salmon', 'Fresh Meat', 'Ambient', '2025-01-18 12:00:00'),
+INSERT INTO Contain (AisleID, ItemID, SuperMarketID) VALUES
+(1, 1, 1),  -- Chicken Breast in Frozen aisle (FreshMart)
+(2, 2, 1),  -- Milk in Refrigerated aisle (FreshMart)
+(1, 3, 1),  -- Frozen Pizza in Frozen aisle (FreshMart)
+(4, 4, 1),  -- Lettuce in Vegetables aisle (FreshMart)
+(9, 5, 2),  -- Dog Food in Pet Food aisle (GreenGrocer)
+(8, 6, 2),  -- Canned Beans in Ambient aisle (GreenGrocer)
+(7, 7, 2),  -- Soda in Refrigerated aisle (GreenGrocer)
+(5, 8, 1),  -- Knife Set in Kitchenware aisle (FreshMart)
+(6, 9, 2),  -- Ice Cream in Frozen aisle (GreenGrocer)
+(8, 10, 2); -- Cookies in Ambient aisle (GreenGrocer)
 
-    -- Aisle 4: Baked
-    ('Bread', 'Baked', 'Ambient', '2025-01-25 12:00:00'),
-    ('Bagels', 'Baked', 'Ambient', '2025-01-24 12:00:00'),
-    ('Cakes', 'Baked', 'Refrigerated', '2025-01-23 12:00:00'),
+INSERT INTO Manufactured_By (ItemID, ProducerID) VALUES
+(1, 1),  -- Chicken Breast by FarmFresh Co.
+(2, 2),  -- Milk by CoolDairy Ltd.
+(3, 3),  -- Frozen Pizza by SnackWorld Inc.
+(4, 1),  -- Lettuce by FarmFresh Co.
+(5, 3),  -- Dog Food by SnackWorld Inc.
+(6, 3),  -- Canned Beans by SnackWorld Inc.
+(7, 2),  -- Soda by CoolDairy Ltd.
+(8, 3),  -- Knife Set by SnackWorld Inc. (just example)
+(9, 3),  -- Ice Cream by SnackWorld Inc.
+(10, 3); -- Cookies by SnackWorld Inc.
 
-    -- Aisle 5: Kitchenware
-    ('Cooking Pot', 'Kitchenware', 'Ambient', '2100-01-01 12:00:00'),
-    ('Knife Set', 'Kitchenware', 'Ambient', '2100-01-01 12:00:00'),
-    ('Blender', 'Kitchenware', 'Ambient', '2100-01-01 12:00:00'),
-
-    -- Aisle 6: Pharmacy
-    ('Aspirin', 'Pharmacy', 'Ambient', '2025-06-30 12:00:00'),
-    ('Bandages', 'Pharmacy', 'Ambient', '2025-07-01 12:00:00'),
-    ('Diet Pet Food', 'Pet Food', 'Ambient', '2025-05-30 12:00:00'),
-
-    -- Aisle 7: Pet Food
-    ('Dog Food', 'Pet Food', 'Ambient', '2025-04-30 12:00:00'),
-    ('Cat Food', 'Pet Food', 'Ambient', '2025-04-30 12:00:00'),
-    ('Fish Food', 'Pet Food', 'Ambient', '2025-04-30 12:00:00'),
-
-    -- Aisle 8: Frozen
-    ('Frozen Pizza', 'Frozen', 'Frozen', '2025-03-31 12:00:00'),
-    ('Frozen Berries', 'Frozen', 'Frozen', '2025-03-31 12:00:00'),
-    ('Frozen Beef', 'Fresh Meat', 'Frozen', '2025-03-31 12:00:00'),
-
-    -- Aisle 9: Refrigerated
-    ('Milk', 'Dairy', 'Refrigerated', '2025-01-21 12:00:00'),
-    ('Yogurt', 'Dairy', 'Refrigerated', '2025-01-22 12:00:00'),
-    ('Cheese', 'Dairy', 'Refrigerated', '2025-01-23 12:00:00'),
-
-    -- Aisle 10: Beverages
-    ('Cola', 'Beverages', 'Ambient', '2025-08-30 12:00:00'),
-    ('Cold Cola', 'Beverages', 'Ambient', '2025-08-30 12:00:00'),
-    ('Orange Juice', 'Beverages', 'Ambient', '2025-08-30 12:00:00'),
-
-    -- Aisle 11: Snacks
-    ('Chips', 'Snacks', 'Ambient', '2025-09-15 12:00:00'),
-    ('Nuts', 'Snacks', 'Ambient', '2025-10-01 12:00:00'),
-    ('Chocolate', 'Snacks', 'Ambient', '2025-09-20 12:00:00');
-
-INSERT INTO Contains (AisleID, ItemID)
-VALUES
-    -- Aisle 1: Vegetables
-    (1, 1), (1, 2), (1, 3),
-    -- Aisle 2: Dry Food
-    (2, 4), (2, 5), (2, 6),
-    -- Aisle 3: Fresh Meat
-    (3, 7), (3, 8), (3, 9),
-    -- Aisle 4: Baked
-    (4, 10), (4, 11), (4, 12),
-    -- Aisle 5: Kitchenware
-    (5, 13), (5, 14), (5, 15),
-    -- Aisle 6: Pharmacy
-    (6, 16), (6, 17), (6, 18),
-    -- Aisle 7: Pet Food
-    (7, 19), (7, 20), (7, 21),
-    -- Aisle 8: Frozen (only frozen items should be here)
-    (8, 22), (8, 23), (8, 24),
-    -- Aisle 9: Refrigerated (only refrigerated items should be here)
-    (9, 25), (9, 26), (9, 27),
-    -- Aisle 10: Beverages
-    (10, 28), (10, 29), (10, 30),
-    -- Aisle 11: Snacks
-    (11, 31), (11, 32), (11, 33);
-
-INSERT INTO Manufactured_By (ItemID, CompanyID)
-VALUES
-    (1, 1), (2, 1), (3, 1),
-    (4, 2), (5, 2), (6, 2),
-    (7, 3), (8, 3), (9, 3),
-    (10, 4), (11, 4), (12, 4),
-    (13, 5), (14, 5), (15, 5),
-    (16, 1), (17, 1), (18, 1),
-    (19, 2), (20, 2), (21, 2),
-    (22, 3), (23, 3), (24, 3),
-    (25, 4), (26, 4), (27, 4),
-    (28, 5), (29, 5), (30, 5),
-    (31, 1), (32, 1), (33, 1);
+INSERT INTO Distance (ProducerID, SuperMarketID, Distance) VALUES
+(1, 1, 8.5),   -- Happy Farms to FreshMart
+(1, 2, 12.3),  -- Happy Farms to GreenGrocer
+(2, 1, 5.0),   -- Urban Dairy to FreshMart
+(2, 2, 9.7),   -- Urban Dairy to GreenGrocer
+(3, 1, 15.2),  -- Global Foods to FreshMart
+(3, 2, 6.8);   -- Global Foods to GreenGrocer
 
 #--------------------------------#
 -- For Testing Triggers
 #--------------------------------#
 
-INSERT INTO Item
-value (34,'Canned beef','Dry food','Refrigerated','2025-02-01');
-
-insert into contains
-    value (2,34);
-
-select * from ItemLogErrors;
-show triggers;
+-- Example of wrong aisle placement
+INSERT INTO Contain (AisleID, ItemID) VALUES (6, 4);
 
 #--------------------------------#
--- For Joins
+-- Joins
 #--------------------------------#
 
--- Inner Join
+CREATE VIEW View_ItemsPerAislePerSuperMarket AS
+SELECT
+    i.ItemID,
+    i.ItemName,
+    i.ItemCategory,
+    i.ItemStorageType,
+    a.AisleID,
+    a.AisleName,
+    s.SuperMarketID,
+    s.SuperMarketName,
+    s.SuperMarketLocation
+FROM
+    Contain c
+    JOIN Item i ON c.ItemID = i.ItemID
+    JOIN Aisle a ON c.AisleID = a.AisleID
+    JOIN SuperMarket s ON a.SuperMarketID = s.SuperMarketID;
+
+SELECT * FROM View_ItemsPerAislePerSuperMarket
+WHERE SuperMarketName = 'FreshMart';
+
 SELECT i.ItemID, i.Name AS ItemName, a.Name AS AisleName
 FROM Item i
 INNER JOIN Contains c ON i.ItemID = c.ItemID
@@ -507,7 +521,7 @@ ORDER BY i.StorageType, a.Name;
 
 
 #--------------------------------#
--- For Stored Procedures
+-- Stored Procedures
 #--------------------------------#
 
 DELIMITER $$
@@ -519,7 +533,7 @@ BEGIN
     DECLARE suggested_aisle INT;
 
     -- Fetch storage type and category for the item
-    SELECT StorageType, Category INTO item_storage_type, item_category
+    SELECT ItemStorageType, Category INTO item_storage_type, item_category
     FROM Item
     WHERE ItemID = item_id;
 
