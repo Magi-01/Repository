@@ -1,7 +1,7 @@
-DROP DATABASE IF EXISTS Aisle_Management;
+drop database Aisle_Management;
 
 CREATE DATABASE Aisle_Management;
-USE Aisle_Management;
+Use Aisle_Management;
 
 #--------------------------------#
 -- For Tables
@@ -10,27 +10,29 @@ USE Aisle_Management;
 -- Create SuperMarket table
 CREATE TABLE SuperMarket (
     SuperMarketID INT PRIMARY KEY,
-    SuperMarketName VARCHAR(255) NOT NULL UNIQUE,
+    SuperMarketName VARCHAR(255) NOT NULL,
     SuperMarketLocation VARCHAR(255) NOT NULL
 );
 
 -- Create SuperMarket table
 CREATE TABLE Aisle (
     AisleID INT PRIMARY KEY,
-    AisleName VARCHAR(255) NOT NULL
+    SuperMarketID INT NOT NULL,
+    AisleName VARCHAR(255) NOT NULL,
+    FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
 );
 
 -- Create Producer table
 CREATE TABLE Producer (
     ProducerID INT PRIMARY KEY,
-    ProducerName VARCHAR(255) NOT NULL UNIQUE,
+    ProducerName VARCHAR(255) NOT NULL,
     ProducerLocation VARCHAR(255) NOT NULL
 );
 
 -- Create Item table
 CREATE TABLE Item (
     ItemID INT PRIMARY KEY,
-    ItemName VARCHAR(255) NOT NULL UNIQUE,
+    ItemName VARCHAR(255) NOT NULL,
     ItemCategory VARCHAR(255),
     ItemStorageType VARCHAR(255),
     ItemPerishable BOOLEAN,
@@ -47,21 +49,15 @@ CREATE TABLE Distance (
     FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
 );
 
-CREATE TABLE AisleSuperMarket (
-    AisleID INT NOT NULL,
-    SuperMarketID INT NOT NULL,
-    PRIMARY KEY (AisleID, SuperMarketID),
-    FOREIGN KEY (AisleID) REFERENCES Aisle(AisleID),
-    FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
-);
-
 -- Create the Contain Table
 CREATE TABLE Contain (
     AisleID INT NOT NULL,
     ItemID INT NOT NULL,
+    SuperMarketID INT NOT NULL,
     PRIMARY KEY (AisleID, ItemID),
     FOREIGN KEY (AisleID) REFERENCES Aisle(AisleID),
-    FOREIGN KEY (ItemID) REFERENCES Item(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
+    FOREIGN KEY (SuperMarketID) REFERENCES SuperMarket(SuperMarketID)
 );
 
 -- Create the Manufactured_By Table
@@ -83,9 +79,9 @@ CREATE TABLE ErrorMessages (
 -- Create ItemLogErrors table
 CREATE TABLE ItemLogErrors (
     LogID INT PRIMARY KEY auto_increment,
-    ItemID INT,
-    AisleID INT,
-    ErrorID INT NOT NULL,
+    ItemID INT Not NULL,
+    AisleID INT Not NULL,
+    ErrorID INT,
     LogTime DATETIME,
     ToBeThrown BOOLEAN NOT NULL DEFAULT TRUE,
     FOREIGN KEY (ItemID) REFERENCES Item(ItemID),
@@ -109,7 +105,8 @@ BEGIN
 
     SELECT COUNT(*) INTO Aisle_count
     FROM Contain
-    WHERE ItemID = NEW.ItemID
+    WHERE ItemID = NEW.ItemID 
+      AND SuperMarketID = NEW.SuperMarketID 
       AND AisleID != NEW.AisleID;
 
     IF Aisle_count > 0 THEN
@@ -142,74 +139,47 @@ BEGIN
 
     CASE
         WHEN item_storage_type = 'Frozen' AND
-            (
-            aisle_id <> (
-                SELECT asm.AisleID
-                FROM AisleSuperMarket asm
-                JOIN Aisle a ON asm.AisleID = a.AisleID
-                WHERE a.AisleName = 'Frozen' AND asm.SuperMarketID = supermarket_id
-                LIMIT 1
-            )
-            OR item_category NOT IN ('Frozen', 'Fresh Meat')
-            )
+             (
+               aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Frozen' AND SuperMarketID = supermarket_id LIMIT 1)
+               OR
+               item_category NOT IN ('Frozen', 'Fresh Meat')
+             )
         THEN
             SET error_message = CONCAT(item_category, ' items with Frozen storage must be placed in the Frozen aisle.');
 
         WHEN item_storage_type = 'Refrigerated' AND
-            item_category IN ('Baked', 'Fresh Meat', 'Beverages') AND
-            aisle_id <> (
-                SELECT asm.AisleID
-                FROM AisleSuperMarket asm
-                JOIN Aisle a ON asm.AisleID = a.AisleID
-                WHERE a.AisleName = 'Refrigerated' AND asm.SuperMarketID = supermarket_id
-                LIMIT 1
-            )
+             item_category IN ('Baked', 'Fresh Meat', 'Beverages') AND
+             aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Refrigerated' AND SuperMarketID = supermarket_id LIMIT 1)
         THEN
             SET error_message = CONCAT(item_category, ' items with Refrigerated storage must be placed in the Refrigerated aisle.');
 
         WHEN item_storage_type = 'Ambient' AND
-            item_category IN ('Refrigerated', 'Frozen')
+             item_category IN ('Refrigerated', 'Frozen')
         THEN
             SET error_message = CONCAT(item_category, ' items cannot have Ambient storage type.');
 
         WHEN item_category = 'Vegetables' AND
-            aisle_id IN (
-                SELECT asm.AisleID
-                FROM AisleSuperMarket asm
-                JOIN Aisle a ON asm.AisleID = a.AisleID
-                WHERE a.AisleName IN ('Frozen', 'Refrigerated') AND asm.SuperMarketID = supermarket_id
-            )
+             aisle_id IN (SELECT AisleID FROM Aisle WHERE AisleName IN ('Frozen', 'Refrigerated') AND SuperMarketID = supermarket_id)
         THEN
             SET error_message = 'Vegetables cannot be placed in Frozen or Refrigerated aisles.';
 
         WHEN item_category = 'Kitchenware' AND
-            aisle_id <> (
-                SELECT asm.AisleID
-                FROM AisleSuperMarket asm
-                JOIN Aisle a ON asm.AisleID = a.AisleID
-                WHERE a.AisleName = 'Kitchenware' AND asm.SuperMarketID = supermarket_id
-                LIMIT 1
-            )
+             aisle_id <> (SELECT AisleID FROM Aisle WHERE AisleName = 'Kitchenware' AND SuperMarketID = supermarket_id LIMIT 1)
         THEN
             SET error_message = 'Kitchenware items must be placed in the Kitchenware aisle.';
 
         WHEN item_category = 'Pet Food' AND
-            aisle_id NOT IN (
-                SELECT asm.AisleID
-                FROM AisleSuperMarket asm
-                JOIN Aisle a ON asm.AisleID = a.AisleID
-                WHERE a.AisleName IN ('Pet Food', 'Pharmacy') AND asm.SuperMarketID = supermarket_id
-            )
+             aisle_id NOT IN (SELECT AisleID FROM Aisle WHERE AisleName IN ('Pet Food', 'Pharmacy') AND SuperMarketID = supermarket_id)
         THEN
             SET error_message = 'Pet Food must be placed in the Pet Food or Pharmacy aisle.';
 
         WHEN item_category IN ('Baked', 'Beverages') AND
-            item_storage_type = 'Frozen'
+             item_storage_type = 'Frozen'
         THEN
             SET error_message = CONCAT(item_category, ' items cannot be stored in Frozen aisles.');
 
         WHEN item_category IN ('Dry Food', 'Snacks') AND
-            item_storage_type IN ('Frozen', 'Refrigerated')
+             item_storage_type IN ('Frozen', 'Refrigerated')
         THEN
             SET error_message = CONCAT(item_category, ' items cannot be stored in Frozen/Refrigerated aisles.');
 
@@ -241,58 +211,46 @@ BEGIN
 
     -- Match aisle by name within the correct supermarket
     IF item_storage_type = 'Frozen' THEN
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName = 'Frozen' AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName = 'Frozen' AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
+
     ELSEIF item_storage_type = 'Refrigerated' THEN
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName = 'Refrigerated' AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName = 'Refrigerated' AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
+
     ELSEIF item_category = 'Vegetables' THEN
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName = 'Vegetables' AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName = 'Vegetables' AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
+
     ELSEIF item_category = 'Kitchenware' THEN
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName = 'Kitchenware' AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName = 'Kitchenware' AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
+
     ELSEIF item_category = 'Pet Food' THEN
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName IN ('Pet Food', 'Pharmacy') AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName IN ('Pet Food', 'Pharmacy') AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
+
     ELSE
-    BEGIN
-        SELECT asm.AisleID INTO suggested_aisle
-        FROM AisleSuperMarket asm
-        JOIN Aisle a ON asm.AisleID = a.AisleID
-        WHERE a.AisleName = 'Ambient' AND asm.SuperMarketID = supermarket_id
+        SELECT AisleID INTO suggested_aisle
+        FROM Aisle
+        WHERE AisleName = 'Ambient' AND SuperMarketID = supermarket_id
         LIMIT 1;
-    END;
     END IF;
 
     RETURN suggested_aisle;
 END$$
 
+DELIMITER ;
 
 
 DELIMITER $$
@@ -339,15 +297,9 @@ FOR EACH ROW
 BEGIN
     DECLARE error_message VARCHAR(255);
     DECLARE error_id INT;
-    DECLARE supermarket_id INT;
 
-    -- Get the supermarket id for the inserted aisle
-    SELECT SuperMarketID INTO supermarket_id
-    FROM AisleSuperMarket
-    WHERE AisleID = NEW.AisleID;
-
-    -- Call validation function with correct supermarket id
-    SET error_message = fn_validate_aisle_compliance(NEW.ItemID, NEW.AisleID, supermarket_id);
+    -- Pass SuperMarketID now
+    SET error_message = fn_validate_aisle_compliance(NEW.ItemID, NEW.AisleID, NEW.SuperMarketID);
 
     IF error_message IS NOT NULL THEN
         SET error_id = fn_insert_into_error_message(error_message);
@@ -372,12 +324,8 @@ BEGIN
     DECLARE ndistance FLOAT;
     DECLARE nperishable BOOLEAN;
     DECLARE error_message VARCHAR(255);
-    DECLARE supermarket_id INT;
 
-    SELECT SuperMarketID INTO supermarket_id
-    from AisleSuperMarket
-    where AisleID = New.AisleID;
-
+    -- Use SuperMarketID directly from NEW.SuperMarketID
     SELECT ProducerID INTO nproducerid
     FROM Manufactured_By
     WHERE ItemID = NEW.ItemID
@@ -385,7 +333,7 @@ BEGIN
 
     SELECT Distance INTO ndistance
     FROM Distance
-    WHERE SuperMarketID = supermarket_id AND ProducerID = nproducerid
+    WHERE SuperMarketID = NEW.SuperMarketID AND ProducerID = nproducerid
     LIMIT 1;
 
     SELECT ItemPerishable, ItemExpirationDate INTO nperishable, checknexpiry
@@ -423,19 +371,19 @@ VALUES
 (1, 'FreshMart', 'Downtown'),
 (2, 'GreenGrocer', 'Uptown');
 
-INSERT INTO Aisle (AisleID, AisleName)
+INSERT INTO Aisle (AisleID, SuperMarketID, AisleName)
 VALUES 
 -- For FreshMart
-(1, 'Frozen'),
-(2, 'Refrigerated'),
-(3, 'Ambient'),
-(4, 'Vegetables'),
-(5, 'Kitchenware'), -- For GreenGrocer
-(6, 'Frozen'),
-(7, 'Refrigerated'),
-(8, 'Ambient'),
-(9, 'Pet Food'),
-(10, 'Pharmacy');
+(1, 1, 'Frozen'),
+(2, 1, 'Refrigerated'),
+(3, 1, 'Ambient'),
+(4, 1, 'Vegetables'),
+(5, 1, 'Kitchenware'), -- For GreenGrocer
+(6, 2, 'Frozen'),
+(7, 2, 'Refrigerated'),
+(8, 2, 'Ambient'),
+(9, 2, 'Pet Food'),
+(10, 2, 'Pharmacy');
 
 INSERT INTO Producer (ProducerID, ProducerName, ProducerLocation)
 VALUES 
@@ -456,27 +404,17 @@ VALUES
 (9, 'Ice Cream', 'Frozen', 'Frozen', TRUE, '2025-08-15'),
 (10, 'Cookies', 'Snacks', 'Ambient', FALSE, '2026-03-10');
 
-INSERT INTO AisleSuperMarket (AisleID, SuperMarketID) VALUES
-(1, 1),
-(2, 1),
-(4, 1),
-(9, 2),
-(8, 2),
-(7, 2),
-(5, 1),
-(6, 2);
-
-INSERT INTO Contain (AisleID, ItemID) VALUES
-(1, 1),  -- Chicken Breast in Frozen aisle (FreshMart)
-(2, 2),  -- Milk in Refrigerated aisle (FreshMart)
-(1, 3),  -- Frozen Pizza in Frozen aisle (FreshMart)
-(4, 4),  -- Lettuce in Vegetables aisle (FreshMart)
-(9, 5),  -- Dog Food in Pet Food aisle (GreenGrocer)
-(8, 6),  -- Canned Beans in Ambient aisle (GreenGrocer)
-(7, 7),  -- Soda in Refrigerated aisle (GreenGrocer)
-(5, 8),  -- Knife Set in Kitchenware aisle (FreshMart)
-(6, 9),  -- Ice Cream in Frozen aisle (GreenGrocer)
-(8, 10); -- Cookies in Ambient aisle (GreenGrocer)
+INSERT INTO Contain (AisleID, ItemID, SuperMarketID) VALUES
+(1, 1, 1),  -- Chicken Breast in Frozen aisle (FreshMart)
+(2, 2, 1),  -- Milk in Refrigerated aisle (FreshMart)
+(1, 3, 1),  -- Frozen Pizza in Frozen aisle (FreshMart)
+(4, 4, 1),  -- Lettuce in Vegetables aisle (FreshMart)
+(9, 5, 2),  -- Dog Food in Pet Food aisle (GreenGrocer)
+(8, 6, 2),  -- Canned Beans in Ambient aisle (GreenGrocer)
+(7, 7, 2),  -- Soda in Refrigerated aisle (GreenGrocer)
+(5, 8, 1),  -- Knife Set in Kitchenware aisle (FreshMart)
+(6, 9, 2),  -- Ice Cream in Frozen aisle (GreenGrocer)
+(8, 10, 2); -- Cookies in Ambient aisle (GreenGrocer)
 
 INSERT INTO Manufactured_By (ItemID, ProducerID) VALUES
 (1, 1),  -- Chicken Breast by FarmFresh Co.
@@ -497,6 +435,17 @@ INSERT INTO Distance (ProducerID, SuperMarketID, Distance) VALUES
 (2, 2, 9.7),   -- Urban Dairy to GreenGrocer
 (3, 1, 15.2),  -- Global Foods to FreshMart
 (3, 2, 6.8);   -- Global Foods to GreenGrocer
+
+
+#--------------------------------#
+-- For Testing Triggers
+#--------------------------------#
+
+#--------------------------------#
+-- Example of wrong aisle placement
+#--------------------------------#
+
+#INSERT INTO Contain (AisleID, ItemID, SuperMarketID) VALUES (6, 4, 1);
 
 
 #--------------------------------#
@@ -531,8 +480,7 @@ JOIN Manufactured_By mb ON i.ItemID = mb.ItemID
 JOIN Producer p ON mb.ProducerID = p.ProducerID
 JOIN Contain c ON i.ItemID = c.ItemID
 JOIN Aisle a ON c.AisleID = a.AisleID
-JOIN AisleSuperMarket asm ON a.AisleID = asm.AisleID
-JOIN SuperMarket s ON asm.SuperMarketID = s.SuperMarketID;
+JOIN SuperMarket s ON a.SuperMarketID = s.SuperMarketID;
 
 SELECT * FROM FullItemDetails;
 
@@ -601,6 +549,10 @@ SELECT * FROM ItemErrorDetails;
 -- Stored Procedures
 #--------------------------------#
 
+#--------------------------------#
+-- Add Item To Aisle
+#--------------------------------#
+
 DELIMITER $$
 
 CREATE PROCEDURE AddItemToAisle (
@@ -609,28 +561,44 @@ CREATE PROCEDURE AddItemToAisle (
     IN inSuperMarketID INT
 )
 BEGIN
+    -- Check that the aisle belongs to the supermarket
     IF EXISTS (
-        SELECT 1 FROM AisleSuperMarket
+        SELECT 1 FROM Aisle
         WHERE AisleID = inAisleID AND SuperMarketID = inSuperMarketID
     ) THEN
-        INSERT INTO Contain (AisleID, ItemID)
-        VALUES (inAisleID, inItemID);
+        -- Insert into Contain table
+        INSERT INTO Contain (AisleID, ItemID, SuperMarketID)
+        VALUES (inAisleID, inItemID, inSuperMarketID);
     ELSE
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Aisle does not belong to the specified supermarket.';
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Aisle does not belong to the specified supermarket.';
     END IF;
 END $$
+
+DELIMITER ;
+
+#--------------------------------#
+-- Remove Item From SuperMarket
+#--------------------------------#
+
+DELIMITER $$
 
 CREATE PROCEDURE RemoveItemFromSuperMarket (
     IN inItemID INT,
     IN inSuperMarketID INT
 )
 BEGIN
-    DELETE c
-    FROM Contain c
-    JOIN AisleSuperMarket asm ON c.AisleID = asm.AisleID
-    WHERE c.ItemID = inItemID
-      AND asm.SuperMarketID = inSuperMarketID;
+    DELETE FROM Contain
+    WHERE ItemID = inItemID AND SuperMarketID = inSuperMarketID;
 END $$
+
+DELIMITER ;
+
+#--------------------------------#
+-- Manually create/add errors
+#--------------------------------#
+
+DELIMITER $$
 
 CREATE PROCEDURE LogItemError (
     IN inItemID INT,
@@ -640,11 +608,27 @@ CREATE PROCEDURE LogItemError (
 BEGIN
     DECLARE errID INT;
 
-    SET errID = fn_insert_into_error_message(inErrorMessage);
+    -- Insert error message if not already present
+    INSERT INTO ErrorMessages (ErrorMessage)
+    VALUES (inErrorMessage);
 
+    -- Retrieve the ErrorID
+    SELECT ErrorID INTO errID
+    FROM ErrorMessages
+    WHERE ErrorMessage = inErrorMessage;
+
+    -- Insert log entry
     INSERT INTO ItemLogErrors (ItemID, AisleID, ErrorID, LogTime, ToBeThrown)
     VALUES (inItemID, inAisleID, errID, NOW(), TRUE);
 END $$
+
+DELIMITER ;
+
+#--------------------------------#
+-- Remove Item after expiration
+#--------------------------------#
+
+DELIMITER $$
 
 CREATE PROCEDURE CleanExpiredItems ()
 BEGIN
@@ -655,25 +639,64 @@ BEGIN
     );
 END $$
 
+DELIMITER ;
+
+#--------------------------------#
+-- Check if the Item complies with Database structure
+#--------------------------------#
+
+DELIMITER $$
+
+CREATE PROCEDURE CheckItemCompliance(
+    IN item_id INT,
+    IN aisle_id INT,
+    IN supermarket_id INT
+)
+BEGIN
+    DECLARE compliance_message VARCHAR(255) DEFAULT NULL;
+    DECLARE suggested_aisle INT;
+
+
+    -- Call your validation function (assumes it returns BOOLEAN or 0/1)
+    SET compliance_message = fn_validate_aisle_compliance(item_id, aisle_id, supermarket_id);
+
+    IF compliance_message IS NULL THEN
+        SELECT 'Aisle is compliant.' AS Message;
+    ELSE
+        -- Suggest correct aisle (assume function returns INT AisleID)
+        SET suggested_aisle = fn_suggest_correct_aisle(item_id, supermarket_id);
+
+        SELECT compliance_message AS ErrorMessage, suggested_aisle AS SuggestedAisleID;
+    END IF;
+END $$
+
+DELIMITER ;
+
+#--------------------------------#
+-- Check if the Item complies with Database structure if not, output an error and aisle reccomendation, then log it into the ItemlogError table
+#--------------------------------#
+
+DELIMITER $$
+
 CREATE PROCEDURE sp_check_item_placement()
 BEGIN
     DECLARE item_id INT;
+    DECLARE aisle_id INT;
     DECLARE item_storage_type VARCHAR(50);
     DECLARE item_category VARCHAR(50);
     DECLARE aisle_name VARCHAR(50);
-    DECLARE aisle_id INT;
-    DECLARE supermarket_id INT;
     DECLARE suggested_aisle INT;
     DECLARE error_message VARCHAR(255);
     DECLARE error_id INT;
+    DECLARE supermarket_id INT;
+
     DECLARE done INT DEFAULT 0;
 
     DECLARE cur CURSOR FOR
-        SELECT I.ItemID, I.ItemStorageType, I.ItemCategory, A.AisleName, C.AisleID, asm.SuperMarketID
+        SELECT I.ItemID, I.ItemStorageType, I.ItemCategory, A.AisleName, C.AisleID, C.SuperMarketID
         FROM Item I
         JOIN Contain C ON I.ItemID = C.ItemID
-        JOIN Aisle A ON C.AisleID = A.AisleID
-        JOIN AisleSuperMarket asm ON A.AisleID = asm.AisleID;
+        JOIN Aisle A ON C.AisleID = A.AisleID;
 
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
@@ -681,6 +704,7 @@ BEGIN
 
     read_loop: LOOP
         FETCH cur INTO item_id, item_storage_type, item_category, aisle_name, aisle_id, supermarket_id;
+
         IF done THEN
             LEAVE read_loop;
         END IF;
@@ -689,15 +713,68 @@ BEGIN
 
         IF aisle_id <> suggested_aisle THEN
             SET error_message = CONCAT(item_category, ' item is not in the suggested aisle: ', suggested_aisle);
-            SET error_id = fn_insert_into_error_message(error_message);
+        END IF;
 
+        IF error_message IS NOT NULL THEN
+            SET error_id = fn_insert_into_error_message(error_message);
             INSERT INTO ItemLogErrors (ItemID, AisleID, LogTime, ErrorID)
             VALUES (item_id, aisle_id, NOW(), error_id);
         END IF;
+
+        -- Reset for next loop
+        SET error_message = NULL;
     END LOOP;
 
     CLOSE cur;
 END $$
+
+DELIMITER ;
+
+#--------------------------------#
+-- To Use Stored Procedures
+#--------------------------------#
+
+
+#--------------------------------#
+-- Checks is the item is in the correct aisle if not suggest where to place it
+#--------------------------------#
+call CheckItemCompliance(2, 8, 1);
+
+call sp_check_item_placement();
+
+SELECT
+    em.ErrorMessage,
+    i.ItemName, i.ItemStorageType,
+    a.AisleID, a.AisleName AS IncorrectAisle,
+    le.LogTime,
+    le.ToBeThrown
+FROM ItemLogErrors le
+JOIN Item i ON le.ItemID = i.ItemID
+JOIN Aisle a ON le.AisleID = a.AisleID
+LEFT JOIN ErrorMessages em ON le.ErrorID = em.ErrorID
+ORDER BY le.LogTime DESC;
+
+# ----------------------------------
+-- Sanity check: run daily to validate item placement and log errors
+# ----------------------------------
+
+DELIMITER$$
+
+CREATE EVENT ev_daily_item_placement_check
+ON SCHEDULE EVERY 1 DAY
+STARTS CURRENT_TIMESTAMP
+DO
+BEGIN
+    CALL sp_check_item_placement();
+END $$
+
+DELIMITER ;
+
+# --------------------------------------------
+-- Logs expired perishable items from the Contain table daily
+# --------------------------------------------
+
+DELIMITER $$
 
 CREATE PROCEDURE sp_expiration_check()
 BEGIN
@@ -707,7 +784,7 @@ BEGIN
     DECLARE item_expiration DATE;
     DECLARE producer_id INT;
     DECLARE producer_name VARCHAR(100);
-    DECLARE producer_location VARCHAR(255);
+    DECLARE producer_email VARCHAR(255);
     DECLARE error_message VARCHAR(255);
     DECLARE error_id INT;
 
@@ -727,14 +804,14 @@ BEGIN
         END IF;
 
         SELECT mb.ProducerID, p.ProducerName, p.ProducerLocation
-        INTO producer_id, producer_name, producer_location
+        INTO producer_id, producer_name, producer_email
         FROM Manufactured_By mb
         JOIN Producer p ON mb.ProducerID = p.ProducerID
         WHERE mb.ItemID = item_id
         LIMIT 1;
 
         IF producer_id IS NOT NULL THEN
-            SET error_message = CONCAT('The item "', item_name, '" has expired. Producer: ', producer_name, ', Location: ', producer_location);
+            SET error_message = CONCAT('The item "', item_name, '" has expired. Producer: ', producer_name, ', Location: ', producer_email);
             SET error_id = fn_insert_into_error_message(error_message);
 
             INSERT INTO ItemLogErrors (ItemID, AisleID, LogTime, ErrorID)
@@ -745,9 +822,13 @@ BEGIN
     CLOSE expired_items;
 END $$
 
-#--------------------------------#
--- Scheduled Event
-#--------------------------------#
+DELIMITER ;
+
+# --------------------------------------------
+-- Removes expired perishable items from the Contain table daily
+# --------------------------------------------
+
+DELIMITER $$
 
 CREATE EVENT ev_daily_expiration_and_cleanup
 ON SCHEDULE EVERY 1 DAY
@@ -756,13 +837,30 @@ DO
 BEGIN
     CALL sp_expiration_check();
     CALL CleanExpiredItems();
-    CALL sp_check_item_placement();
+END $$
+
+DELIMITER ;
+
+
+#--------------------------------#
+-- For Event Handling
+#--------------------------------#
+
+DELIMITER $$
+
+CREATE EVENT ev_daily_expiration_process
+ON SCHEDULE EVERY 1 DAY
+STARTS CURRENT_TIMESTAMP
+DO
+BEGIN
+    CALL sp_expiration_check();
+    CALL ev_daily_expiration_and_cleanup();
 END $$
 
 DELIMITER ;
 
 #--------------------------------#
--- To Test
+-- To See and Test Event
 #--------------------------------#
 
 
@@ -779,8 +877,3 @@ LEFT JOIN
     ErrorMessages em
 ON
     il.ErrorID = em.ErrorID;
-
-#--------------------------------#
--- Example of wrong aisle placement
-#--------------------------------#
-INSERT INTO Contain (AisleID, ItemID) VALUES (6, 4);
