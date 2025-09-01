@@ -1,32 +1,57 @@
-
 df = read.csv("sandwich.csv", header = T)
 
-#library(ggplot2)
+# -------------------------------
+# Load libraries
+# -------------------------------
+library(ggplot2)
+library(dplyr)
+library(boot)
 
-ggplot(df, aes(x = antCount, y = bread)) +
-  geom_line() +
-  labs(title = "Line Plot", x = "X-axis", y = "Y-axis") +
+# Check structure
+str(df)
+summary(df)
+
+# Convert predictors to factors
+df$bread   <- factor(df$bread)
+df$topping <- factor(df$topping)
+df$butter  <- factor(df$butter)
+
+str(df)
+summary(df)
+# Quick check for missing values
+sum(is.na(df))
+
+# -------------------------------
+# Visualizations
+# -------------------------------
+par(mfrow = c(2,2))
+# Distribution of ant counts
+ggplot(df, aes(x = antCount)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
   theme_minimal()
 
-ggplot(df, aes(x = bread, y = antCount)) +
-  geom_col() +
-  labs(title = "Value Bar Plot", x = "bread", y = "antCount") +
-  theme_minimal()
+# Boxplots by bread / topping / butter
+ggplot(df, aes(x = bread, y = antCount, fill = bread)) +
+  geom_boxplot() + theme_minimal()
 
-as.
+ggplot(df, aes(x = topping, y = antCount, fill = topping)) +
+  geom_boxplot() + theme_minimal()
 
-df["antCount"] = as.numeric(as.integer(unlist(df["antCount"])))
-df["bread"] = as.numeric(as.factor(unlist(df["bread"])))
-df["topping"] = as.numeric(as.factor(unlist(df["topping"])))
-df["butter"] = as.numeric(as.factor(unlist(df["butter"])))
+ggplot(df, aes(x = butter, y = antCount, fill = butter)) +
+  geom_boxplot() + theme_minimal()
 
-library(nnet)
-model <- multinom(unlist(df["bread"]) ~ unlist(df["antCount"]) * unlist(df["topping"]) * unlist(df["butter"]), data = df)
+# -------------------------------
+# Linear Regression Model
+# -------------------------------
+# Linear model
+model_lm <- lm(antCount ~ bread + topping + butter, data = df)
+summary(model_lm)
 
-df$predicted <- predict(model, newdata = df)
+# Diagnostic plots
+par(mfrow = c(2,2))
+plot(model_lm)
 
-ggplot(df, aes(x = antCount, y = bread, color = factor(topping))) +
-  geom_point() +
-  geom_smooth(method = "lm", se = FALSE) +
-  facet_wrap(~ butter) +
-  labs(title = "3-Way Interaction: x * z * k", color = "z")
+library(emmeans)
+emm <- emmeans(model_lm, ~ bread + topping + butter)
+
+plot(emm)

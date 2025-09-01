@@ -45,6 +45,15 @@ class ValueIterationAgent(ValueEstimationAgent):
 
         # Write value iteration code here
         "*** YOUR CODE HERE ***"
+        for i in range(self.iterations):
+            new_values = util.Counter()  # fresh copy for V_k
+            for state in self.mdp.getStates():
+                if not self.mdp.isTerminal(state):
+                    q_values = [self.computeQValueFromValues(state, action) 
+                                for action in self.mdp.getPossibleActions(state)]
+                    new_values[state] = max(q_values)
+            self.values = new_values  # update all at once after iteration
+
 
 
     def getValue(self, state):
@@ -60,6 +69,11 @@ class ValueIterationAgent(ValueEstimationAgent):
           value function stored in self.values.
         """
         "*** YOUR CODE HERE ***"
+        q_value = 0
+        for next_state, prob in self.mdp.getTransitionStatesAndProbs(state, action):
+            reward = self.mdp.getReward(state, action, next_state)
+            q_value += prob * (reward + self.discount * self.values[next_state])
+        return q_value
         util.raiseNotDefined()
 
     def computeActionFromValues(self, state):
@@ -72,6 +86,20 @@ class ValueIterationAgent(ValueEstimationAgent):
           terminal state, you should return None.
         """
         "*** YOUR CODE HERE ***"
+        if self.mdp.isTerminal(state):
+            return None
+
+        actions = self.mdp.getPossibleActions(state)
+        best_action = None
+        max_q_value = float('-inf')
+
+        for action in actions:
+            q = self.computeQValueFromValues(state, action)
+            if q > max_q_value:
+                max_q_value = q
+                best_action = action
+
+        return best_action
         util.raiseNotDefined()
 
     def getPolicy(self, state):
