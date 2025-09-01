@@ -1,6 +1,7 @@
 DROP DATABASE IF EXISTS Aisle_Management;
 
 CREATE DATABASE Aisle_Management;
+
 USE Aisle_Management;
 
 #--------------------------------#
