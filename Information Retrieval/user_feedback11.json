@@ -1,0 +1,79 @@
+{
+  "ai healthcar": {
+    "expanded_terms": [
+      "set",
+      "introduct",
+      "discuss",
+      "ai",
+      "healthcar",
+      "machin",
+      "applic",
+      "medicin",
+      "techniqu",
+      "overview",
+      "practic",
+      "guid",
+      "learn",
+      "algorithm",
+      "concept",
+      "deep",
+      "paper"
+    ],
+    "relevant_docs": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "deep learn": {
+    "expanded_terms": [
+      "explor",
+      "introduct",
+      "healthcar",
+      "ai",
+      "detail",
+      "neural",
+      "machin",
+      "applic",
+      "techniqu",
+      "guid",
+      "practic",
+      "algorithm",
+      "concept"
+    ],
+    "relevant_docs": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  "neural network": {
+    "expanded_terms": [
+      "explor",
+      "ai",
+      "introduct",
+      "healthcar",
+      "detail",
+      "machin",
+      "applic",
+      "techniqu",
+      "appli",
+      "practic",
+      "guid",
+      "learn",
+      "concept",
+      "deep"
+    ],
+    "relevant_docs": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  }
+}
