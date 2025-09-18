@@ -67,7 +67,7 @@ function [vc, k, semilungh] = colebrook_bisection1(a, b)
 
 end
 
-% Run automatically when the file is executed
+%% Auto-run
 if ~isdeployed
     format long
     [vc, k, semilungh] = colebrook_bisection1(0.08, 1);

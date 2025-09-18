@@ -1,9 +1,9 @@
 import time
 import numpy as np
 
-n = 512
-m = 512
-p = 512
+n = 1024
+m = 1024
+p = 1024
 
 a = np.random.rand(n, p)
 b = np.random.rand(p, m)

@@ -60,7 +60,7 @@ function [vc, k, steps] = colebrook_newton_1(x0, maxit)
 
 end
 
-%% Auto-run block
+%% Auto-run
 if ~isdeployed
     format long
     start = 0.08;

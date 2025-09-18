@@ -84,7 +84,7 @@ hold off;
 
 end
 
-%% Example auto-run
+%% Auto-run
 if ~isdeployed
     format long
     F = @(x) [x(1)^2 + x(2)^2 - 1; x(1)^2 + x(1) - x(2)];
