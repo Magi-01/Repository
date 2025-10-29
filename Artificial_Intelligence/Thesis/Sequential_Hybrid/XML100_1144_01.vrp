@@ -1,4 +1,4 @@
-NAME : XML100_1144_01
+﻿NAME : XML100_1144_01
 COMMENT : Generated as the XML100 dataset from the CVRPLIB
 TYPE : CVRP
 DIMENSION : 101
@@ -108,7 +108,7 @@ NODE_COORD_SECTION
 101  560  340 
 DEMAND_SECTION
 1    0   
-2    44  
+2    0  
 3    69  
 4    45  
 5    79  
@@ -210,5 +210,6 @@ DEMAND_SECTION
 101  18  
 DEPOT_SECTION
 1
+2
 -1
 EOF

@@ -240,15 +240,16 @@ f.write('DEPOT_SECTION\n1\n-1\nEOF\n')
 
 f.close()
 
-# x = [v[0] for v in V]
-# y = [v[1] for v in V]
-# x_s = [v[0] for v in seeds]
-# y_s = [v[1] for v in seeds]
-# plt.figure(figsize=(20, 20), dpi=80)
-# plt.scatter(x, y, marker='o', color='blue',edgecolor='blue', s=40)
-# plt.scatter(x_s, y_s, marker='o', color='magenta',edgecolor='magenta', s=40)
-# plt.scatter([x[0]], [y[0]], marker='s', edgecolor='black', color='yellow', s=200)
-# plt.xticks([]) # Turn off x labels
-# plt.yticks([]) # Turn off y labels
-# plt.savefig(instanceName+'.png')
-# plt.close()
+from matplotlib import pyplot as plt
+x = [v[0] for v in V]
+y = [v[1] for v in V]
+x_s = [v[0] for v in seeds]
+y_s = [v[1] for v in seeds]
+plt.figure(figsize=(20, 20), dpi=80)
+plt.scatter(x, y, marker='o', color='blue',edgecolor='blue', s=40)
+plt.scatter(x_s, y_s, marker='o', color='magenta',edgecolor='magenta', s=40)
+plt.scatter([x[0]], [y[0]], marker='s', edgecolor='black', color='yellow', s=200)
+plt.xticks([]) # Turn off x labels
+plt.yticks([]) # Turn off y labels
+plt.savefig(instanceName+'.png')
+plt.close()
