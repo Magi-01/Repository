@@ -10,18 +10,28 @@ clustered_cvrp_pipeline_full.py
 - Optional OR-Tools Routing (multi-vehicle)
 """
 
-import os, math, random, pickle
+import os, math, random, pickle, copy
 from collections import defaultdict
-import numpy as np_cpu
+import numpy as np
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import matplotlib.gridspec as gridspec
 from ortools.sat.python import cp_model
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import multiprocessing as mp
+import json
 
-file_path = "C:\\Users\\mutua\\Documents\\Repository\\Repository\\Artificial_Intelligence\\Thesis\\Sequential_Hybrid\\XML100_1144_01.vrp"
+file_path = "C:\\Users\\mutua\\Documents\\Repository\\Repository\\Artificial_Intelligence\\Thesis\\Sequential_Hybrid\\XML1000_1143_01.vrp"
+
+START_TIME_MIN = 8*60
+END_TIME_MIN = 18*60
+SERVICE_MIN = 5
+VEHICLE_SPEED = 20
+MIN_PER_HOUR = 60
 
 # -----------------------------
 # 0. GPU Detection
@@ -34,7 +44,7 @@ try:
     xp = cp
     print("CuPy available — GPU acceleration enabled for array ops.")
 except Exception:
-    xp = np_cpu
+    xp = np
     print("CuPy not available — using NumPy (CPU).")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -74,8 +84,9 @@ def build_distance_matrix(coords, nodes):
     dx = pts[:, None, 0] - pts[None, :, 0]
     dy = pts[:, None, 1] - pts[None, :, 1]
     D = xp.sqrt(dx**2 + dy**2)
+    travel_minutes = ((D/1000) / VEHICLE_SPEED) * 60
     node2idx = {nodes[i]: i for i in range(len(nodes))}
-    return D, node2idx
+    return travel_minutes, node2idx
 
 def euclid(a, b): return math.hypot(a[0]-b[0], a[1]-b[1])
 def travel_minutes(a, b, speed=1.0): return euclid(a, b)/speed
@@ -84,7 +95,7 @@ def travel_minutes(a, b, speed=1.0): return euclid(a, b)/speed
 # 3. Clustering
 # -----------------------------
 def cluster_deliveries(coords, deliveries, n_clusters=7, random_state=0):
-    X = np_cpu.array([coords[d] for d in deliveries])
+    X = np.array([coords[d] for d in deliveries])
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
     labels = kmeans.fit_predict(X)
     clusters = {i: [] for i in range(n_clusters)}
@@ -95,10 +106,6 @@ def cluster_deliveries(coords, deliveries, n_clusters=7, random_state=0):
 # -----------------------------
 # 4. ClusterTimeEnv
 # -----------------------------
-START_TIME_MIN = 8*60
-END_TIME_MIN = 18*60
-SERVICE_MIN = 15
-VEHICLE_SPEED = 60
 
 class ClusterTimeEnv:
     def __init__(self, cluster_nodes, depot, coords):
@@ -208,7 +215,7 @@ class DictQAgent:
     def load(fname, env):
         agent = DictQAgent(env); agent.Q = pickle.load(open(fname,"rb")); return agent
     
-def reconstruct_schedule_from_bitmask_agent(agent:BitmaskQAgent, env:ClusterTimeEnv, start_time=START_TIME_MIN):
+'''def reconstruct_schedule_from_bitmask_agent(agent:BitmaskQAgent, env:ClusterTimeEnv, start_time=START_TIME_MIN):
     mask = 0
     loc = env.depot
     s_idx = agent.state_index(loc, mask)
@@ -231,92 +238,214 @@ def reconstruct_schedule_from_bitmask_agent(agent:BitmaskQAgent, env:ClusterTime
         steps += 1
         if steps > env.m*2: break  # safety
     return schedule
+'''
 
 # -----------------------------
 # 6. Per-cluster Training
 # -----------------------------
-def train_cluster_time(env:ClusterTimeEnv, episodes=2000):
-    agent_type = 'bitmask' if env.m<=BITMASK_Q_THRESHOLD else 'dict'
-    if agent_type=='bitmask':
-        agent = BitmaskQAgent(env); init_mask=0; init_loc=env.nodes[0]; init_idx=agent.state_index(init_loc,init_mask)
+def run_episode(args):
+    """Worker function for one process — handles both agent types."""
+    env, agent_type, episodes, START_TIME_MIN = args
+
+    if agent_type == 'bitmask':
+        agent = BitmaskQAgent(env)
+        init_mask = 0
+        init_loc = env.nodes[0]
+        init_idx = agent.state_index(init_loc, init_mask)
+
         for ep in range(episodes):
             loc, mask, s_idx = init_loc, init_mask, init_idx
-            total_r=0
-            steps=0
+            steps = 0
+
             while True:
                 feasible = agent.available_actions_from_index(s_idx)
-                if not feasible: break
-                a = agent.choose_action(s_idx); next_node=env.customers[a]
-                reward = -0.1*float(env.D[env.node2idx[loc],env.node2idx[next_node]])+50
-                new_mask = mask|(1<<a); next_idx = agent.state_index(next_node,new_mask)
-                agent.step_update(s_idx,a,next_idx,reward); total_r+=reward
-                s_idx, loc, mask = next_idx, next_node, new_mask; steps+=1
-                if steps>(env.m+2)*4: break
-            agent.epsilon = max(0.01,agent.epsilon*0.995)
-        return agent
+                if not feasible:
+                    break
+
+                a = agent.choose_action(s_idx)
+                next_node = env.customers[a]
+                reward = -0.1 * float(env.D[env.node2idx[loc], env.node2idx[next_node]]) + 50
+
+                new_mask = mask | (1 << a)
+                next_idx = agent.state_index(next_node, new_mask)
+                agent.step_update(s_idx, a, next_idx, reward)
+
+                s_idx, loc, mask = next_idx, next_node, new_mask
+                steps += 1
+
+                if steps > (env.m + 2) * 4:
+                    break
+
+            agent.epsilon = max(0.01, agent.epsilon * 0.995)
+
+        return agent.Q
+
     else:
         agent = DictQAgent(env)
+        transition_cache = env.transition_dict
+        reward_cache = env.reward_dict
+        depot = env.depot
+        m = env.m
+
         for ep in range(episodes):
-            state = (env.depot,frozenset(),START_TIME_MIN); steps=0
+            state = (depot, frozenset(), START_TIME_MIN)
+            steps = 0
+
             while True:
                 action = agent.choose_action(state)
-                if action is None: break
-                next_state = list(env.transition_dict(state,action).keys())[0]
-                r = env.reward_dict(state,action,next_state)
-                agent.update(state,action,r,next_state)
-                state = next_state; steps+=1
-                if len(state[1])==env.m or steps>(env.m+2)*6: break
-            agent.epsilon = max(0.01,agent.epsilon*0.995)
-        return agent
+                if action is None:
+                    break
+
+                next_state = next(iter(transition_cache(state, action)))
+                r = reward_cache(state, action, next_state)
+                agent.update(state, action, r, next_state)
+                state = next_state
+                steps += 1
+
+                if len(state[1]) == m or steps > (m + 2) * 6:
+                    break
+
+            agent.epsilon = max(0.01, agent.epsilon * 0.995)
+
+        return agent.Q
+
+
+def merge_q_tables(tables):
+    """Merge multiple Q-tables (nested dicts) by averaging shared entries."""
+    merged = {}
+
+    for table in tables:
+        for state, action_dict in table.items():
+            if state not in merged:
+                merged[state] = action_dict.copy()
+            else:
+                for action, value in action_dict.items():
+                    if action in merged[state]:
+                        merged[state][action] = (merged[state][action] + value) / 2.0
+                    else:
+                        merged[state][action] = value
+    return merged
+
+def train_cluster_time(env: ClusterTimeEnv, episodes=2000, n_processes=4):
+    """Parallel Q-learning training for cluster-time environment."""
+    BITMASK_Q_THRESHOLD = 10  # adjust as appropriate
+    START_TIME_MIN = 480
+
+    # Choose agent type
+    agent_type = 'bitmask' if env.m <= BITMASK_Q_THRESHOLD else 'dict'
+
+    # Split episodes per process
+    episodes_per_process = episodes // n_processes
+
+    # Prepare arguments for each worker
+    args_list = [
+        (copy.deepcopy(env), agent_type, episodes_per_process, START_TIME_MIN)
+        for _ in range(n_processes)
+    ]
+
+    # Run training in parallel
+    with mp.Pool(processes=n_processes) as pool:
+        q_tables = pool.map(run_episode, args_list)
+
+    # Merge results
+    merged_Q = merge_q_tables(q_tables)
+
+    # Initialize final agent and assign merged Q
+    final_agent = BitmaskQAgent(env) if agent_type == 'bitmask' else DictQAgent(env)
+    final_agent.Q = merged_Q
+
+    print(f"Training complete using {agent_type} agent ({n_processes} processes, {episodes} episodes total).")
+    return final_agent
 
 # -----------------------------
 # 7. Schedule Reconstruction & Gantt
 # -----------------------------
-def reconstruct_schedule_from_dict_agent(agent: DictQAgent, env: ClusterTimeEnv):
+def reconstruct_schedule_from_agent(agent, env):
     """
-    Reconstruct schedule ensuring depot return each day.
-    Returns list of tuples:
-    (node_id, absolute_time_minutes, start_service_time, finish_time)
+    Reconstruct schedule from a trained agent (Dict or Bitmask),
+    ensuring daily depot returns and respecting service/end time constraints.
+
+    Returns a list of tuples:
+        (node_id, arrival_time, start_service_time, finish_time)
     """
+    # --- Constants ---
+    START_TIME_MIN = getattr(env, "START_TIME_MIN", 480)  # default 8:00
+    END_TIME_MIN = getattr(env, "END_TIME_MIN", 1080)     # default 18:00
+    SERVICE_MIN = getattr(env, "SERVICE_MIN", 10)
+
+    # --- Initialization ---
     unvisited = set(env.customers)
     absolute_time = START_TIME_MIN
     schedule = []
+    depot = env.depot
+
+    # Cache lookups for performance
+    travel_minutes = env.travel_minutes
+    is_bitmask_agent = hasattr(agent, "state_index")
 
     while unvisited:
-        loc = env.depot  # start at depot
+        loc = depot
         cur_time = absolute_time
 
-        # Visit as many as possible within the day
-        while True:
-            state = (loc, frozenset(set(env.customers) - unvisited), cur_time)
-            feasible = list(unvisited)
-            if not feasible:
-                break
-
-            # choose best action according to agent
-            if state in agent.Q and agent.Q[state]:
-                action = max(agent.Q[state], key=agent.Q[state].get)
+        while unvisited:
+            # Construct the state based on agent type
+            if is_bitmask_agent:
+                # For bitmask agents, reconstruct mask
+                visited_mask = 0
+                for i, node in enumerate(env.customers):
+                    if node not in unvisited:
+                        visited_mask |= (1 << i)
+                s_idx = agent.state_index(loc, visited_mask)
+                feasible_actions = agent.available_actions_from_index(s_idx)
+                if not feasible_actions:
+                    break
+                # Choose best action from Q-values
+                q_vals = agent.Q.get(s_idx, {})
+                if q_vals:
+                    a_idx = max(q_vals, key=q_vals.get)
+                    next_node = env.customers[a_idx]
+                else:
+                    next_node = random.choice(env.customers)
             else:
-                action = random.choice(feasible)
+                # Dict agent
+                visited_fs = frozenset(set(env.customers) - unvisited)
+                state = (loc, visited_fs, cur_time)
+                feasible_actions = list(unvisited)
+                if not feasible_actions:
+                    break
 
-            travel = env.travel_minutes(loc, action)
+                if state in agent.Q and agent.Q[state]:
+                    next_node = max(agent.Q[state], key=agent.Q[state].get)
+                else:
+                    next_node = random.choice(feasible_actions)
+
+            # --- Compute travel & timing ---
+            travel = travel_minutes(loc, next_node)
             arrival = cur_time + travel
             finish = arrival + SERVICE_MIN
 
             if finish > END_TIME_MIN:
-                # cannot complete today, schedule next day at START_TIME_MIN
+                # Stop daily route — return to depot
                 break
 
-            schedule.append((action, arrival, arrival, finish))
+            # Record schedule
+            schedule.append((next_node, arrival, arrival, finish))
+            unvisited.discard(next_node)
+            loc = next_node
             cur_time = finish
-            loc = action
-            unvisited.remove(action)
 
-        # End of day: return to depot
-        travel_back = env.travel_minutes(loc, env.depot)
-        cur_time += travel_back
-        # Start next day at 8:00
-        absolute_time = ((cur_time // (24*60)) * 24*60) + START_TIME_MIN
+        # Return to depot and start next day
+        cur_time += travel_minutes(loc, depot)
+
+        #Return to depot before next day
+        if loc != depot:
+            arrival_back = cur_time + travel_minutes(loc, depot)
+            finish_back = arrival_back  # no service
+            schedule.append((depot, arrival_back, arrival_back, finish_back))
+            loc = depot
+            cur_time = finish_back
+
+        absolute_time = ((cur_time // (24 * 60)) + 1) * 24 * 60 + START_TIME_MIN
 
     return schedule
 
@@ -591,6 +720,132 @@ def plot_clusters_routes_and_gantt(coords, clusters, cluster_routes, cluster_sch
     plt.tight_layout()
     plt.show()
 
+def animate_clusters_routes_and_gantt(coords, clusters, cluster_routes, cluster_schedules, cluster_centers, depots, interval=200):
+    """
+    Animated version of plot_clusters_routes_and_gantt:
+    - Vehicles move along their routes in the map view.
+    - Gantt chart shows time progress with a moving time bar.
+    """
+
+    colors = plt.cm.get_cmap("tab10", len(clusters))
+
+    # --- Helper to safely get coordinates ---
+    def get_xy(node):
+        """Return coordinate (x, y) whether node is an ID or already a coordinate."""
+        if isinstance(node, tuple) and len(node) == 2:
+            return node
+        return coords[node]
+
+    # --- Precompute per-cluster route and time info ---
+    cluster_data = {}
+    global_min_t, global_max_t = float("inf"), 0
+    for cid, schedule in cluster_schedules.items():
+        if not schedule:
+            continue
+        times = [t[1] for t in schedule] + [t[3] for t in schedule]
+        min_t, max_t = min(times), max(times)
+        global_min_t = min(global_min_t, min_t)
+        global_max_t = max(global_max_t, max_t)
+        cluster_data[cid] = {
+            "schedule": schedule,
+            "route": cluster_routes.get(cid, []),
+            "current_index": 0,
+            "current_pos": cluster_centers[cid],
+            "min_t": min_t,
+            "max_t": max_t
+        }
+
+    # --- Figure and layout ---
+    fig = plt.figure(figsize=(14, 10))
+    gs = gridspec.GridSpec(2, 1, height_ratios=[2, 1])
+    ax_map = fig.add_subplot(gs[0])
+    ax_gantt = fig.add_subplot(gs[1])
+
+    # --- Static map setup ---
+    for cid, nodes in clusters.items():
+        xs = [coords[n][0] for n in nodes]
+        ys = [coords[n][1] for n in nodes]
+        ax_map.scatter(xs, ys, color=colors(cid), alpha=0.5, label=f"Cluster {cid}")
+        cx, cy = cluster_centers[cid]
+        ax_map.scatter([cx], [cy], color=colors(cid), marker='X', s=150, edgecolor='k')
+
+    # Plot depots
+    dx, dy = zip(*[coords[d] for d in depots])
+    ax_map.scatter(dx, dy, color='black', marker='D', s=120, label="Depot")
+
+    # --- Vehicle markers ---
+    vehicle_markers = {}
+    for cid in clusters:
+        c = colors(cid)
+        (veh_marker,) = ax_map.plot([], [], 'o', color=c, markersize=10, label=f"Vehicle {cid}")
+        vehicle_markers[cid] = veh_marker
+
+    ax_map.legend()
+    ax_map.set_title("Animated Cluster Routes")
+    ax_map.grid(True)
+
+    # --- Static Gantt chart setup ---
+    y_offset = 0
+    yticks, ylabels = [], []
+    for cid, schedule in cluster_schedules.items():
+        for node, arr, start, finish in schedule:
+            duration = finish - start
+            ax_gantt.broken_barh(
+                [(start, duration)],
+                (y_offset - 0.4, 0.8),
+                facecolors=f"C{cid}"
+            )
+        yticks.append(y_offset)
+        ylabels.append(f"Cluster {cid}")
+        y_offset += 1
+
+    # Time line on Gantt
+    (time_line,) = ax_gantt.plot([global_min_t, global_min_t], [-0.5, len(clusters)], 'r-', linewidth=2)
+    ax_gantt.set_yticks(yticks)
+    ax_gantt.set_yticklabels(ylabels)
+    ax_gantt.set_xlim(global_min_t, global_max_t)
+    ax_gantt.set_xlabel("Time (minutes)")
+    ax_gantt.set_title("Animated Delivery Gantt Chart")
+    ax_gantt.grid(True, axis='x', linestyle='--', alpha=0.5)
+
+    # --- Animation function ---
+    def update(frame_time):
+        # Update moving vertical time line on Gantt
+        time_line.set_xdata([frame_time, frame_time])
+
+        for cid, data in cluster_data.items():
+            sched = data["schedule"]
+            # Find current segment
+            for i, (node, arr, start, finish) in enumerate(sched):
+                if arr <= frame_time <= finish:
+                    prev_node = cluster_centers[cid] if i == 0 else sched[i - 1][0]
+                    next_node = node
+                    t_ratio = (frame_time - arr) / max(1e-5, (finish - arr))
+                    px, py = get_xy(prev_node)
+                    nx, ny = get_xy(next_node)
+                    x = px + (nx - px) * t_ratio
+                    y = py + (ny - py) * t_ratio
+                    vehicle_markers[cid].set_data([x], [y])
+                    break
+                elif frame_time < sched[0][1]:
+                    # Before route starts — stay at depot (nearest to cluster center)
+                    cx, cy = cluster_centers[cid]
+                    depot_node = min(
+                        depots,
+                        key=lambda d: math.hypot(coords[d][0] - cx, coords[d][1] - cy)
+                    )
+                    dx, dy = get_xy(depot_node)
+                    vehicle_markers[cid].set_data([dx], [dy])
+        return list(vehicle_markers.values()) + [time_line]
+
+    # --- Animate ---
+    frames = np.linspace(global_min_t, global_max_t, int((global_max_t - global_min_t) / 2))
+    ani = animation.FuncAnimation(fig, update, frames=frames, interval=interval, blit=True, repeat=False)
+
+    plt.tight_layout()
+    from IPython.display import HTML, display
+    display(HTML(ani.to_jshtml()))
+    return ani
 
 
 # -----------------------------
@@ -605,36 +860,70 @@ def main(file_path, n_clusters=7, per_cluster_episodes=2000):
     cluster_routes={}
     cluster_schedules = {}
     for cid, nodes in clusters.items():
-        print(f"\nTraining cluster {cid}, size={len(nodes)}")
-        centroid = cluster_centers[cid]
-        chosen_depot = min(depots,key=lambda d: math.hypot(coords[d][0]-centroid[0],coords[d][1]-centroid[1]))
-        env = ClusterTimeEnv(nodes,chosen_depot,coords)
-        agent = train_cluster_time(env,episodes=per_cluster_episodes)
-        agent_fname=f"cluster_agent_{cid}.pkl"; agent.save(agent_fname)
-        if isinstance(agent,DictQAgent):
-            schedule = reconstruct_schedule_from_dict_agent(agent,env)
-            plot_gantt(schedule, cluster_id=cid)
-        else:
-            schedule = reconstruct_schedule_from_bitmask_agent(agent, env)
+        print(f"\n Training cluster {cid} (size={len(nodes)})")
 
-        cluster_routes[cid] = [x[0] for x in schedule]
+        # --- Select depot nearest to cluster centroid ---
+        centroid = cluster_centers[cid]
+        chosen_depot = min(
+            depots,
+            key=lambda d: math.hypot(coords[d][0] - centroid[0], coords[d][1] - centroid[1])
+        )
+
+        # --- Initialize environment ---
+        env = ClusterTimeEnv(nodes, chosen_depot, coords)
+
+        # --- Train the agent (parallelized inside function) ---
+        agent = train_cluster_time(env, episodes=per_cluster_episodes)
+
+        # --- Save trained agent ---
+        agent_fname = f"cluster_agent_{cid}.pkl"
+        agent.save(agent_fname)
+        print(f"Saved {agent_fname}")
+
+        # --- Reconstruct daily schedule ---
+        schedule = reconstruct_schedule_from_agent(agent, env)
+
+        # --- Plot Gantt chart or timeline ---
+        #plot_gantt(schedule, cluster_id=cid)
+
+        # --- Store results for later use ---
+        cluster_routes[cid] = [node for node, *_ in schedule]
         cluster_schedules[cid] = schedule
 
     #nodes = list(coords.keys())          # all node IDs
     #distances, node2idx = build_distance_matrix(coords, nodes)
-    plot_full_gantt(cluster_schedules, cluster_routes, service_time=15)
-    plot_full_gantt_per_vehicle(cluster_schedules, cluster_routes, service_time=15)
-    plot_clusters_and_routes(coords,clusters,cluster_routes,cluster_centers)
-    plot_clusters_routes_with_depots(coords,clusters,cluster_routes,cluster_centers,depots)
-    plot_clusters_routes_and_gantt(coords,clusters,cluster_routes,cluster_schedules,cluster_centers,depots)
+    #plot_full_gantt(cluster_schedules, cluster_routes, service_time=15)
+    #plot_full_gantt_per_vehicle(cluster_schedules, cluster_routes, service_time=15)
+    #plot_clusters_and_routes(coords,clusters,cluster_routes,cluster_centers)
+    #plot_clusters_routes_with_depots(coords,clusters,cluster_routes,cluster_centers,depots)
+    #plot_clusters_routes_and_gantt(coords,clusters,cluster_routes,cluster_schedules,cluster_centers,depots)
+    #animate_clusters_routes_and_gantt(coords, clusters, cluster_routes, cluster_schedules, cluster_centers, depots, interval=200)
 
 
     print("\nCluster routes trained and saved.")
-    return coords, depots, clusters, cluster_routes, cluster_centers
+    return coords, depots, clusters, cluster_routes, cluster_centers, cluster_schedules
 
 if __name__ == "__main__":
-    coords, depots, clusters, cluster_routes, cluster_centers = main(
+    coords, depots, clusters, cluster_routes, cluster_centers, cluster_schedules = main(
         file_path,
         n_clusters=5,
         per_cluster_episodes=1000
     )
+    def serialize(obj):
+        if isinstance(obj, (set, tuple)):
+            return list(obj)
+        if isinstance(obj, dict):
+            return {str(k): serialize(v) for k, v in obj.items()}
+        return obj
+
+    save_data = {
+        "coords": serialize(coords),
+        "clusters": serialize(clusters),
+        "cluster_routes": serialize(cluster_routes),
+        "cluster_schedules": serialize(cluster_schedules),
+        "cluster_centers": serialize(cluster_centers),
+        "depots": serialize(depots)
+    }
+
+    with open("cluster_data.json", "w") as f:
+        json.dump(save_data, f, indent=2)
