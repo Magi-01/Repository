@@ -15,7 +15,7 @@ Usage example:
 
 """
 
-file_path = "XML100000_3362_02.vrp"
+file_path = "XML100000_1363_02.vrp"
 
 import os
 import math
@@ -591,5 +591,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     main(args.input, n_clusters=args.clusters, per_cluster_episodes=args.episodes, n_processes=args.processes, save_plots=args.plots)
-
-#XML1000_1143_01.vrp
