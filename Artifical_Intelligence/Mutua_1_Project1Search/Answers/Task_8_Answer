@@ -1,0 +1,15 @@
+Q: The ClosestDotSearchAgent won’t always find the shortest possible
+path through the maze. The student should understand why and try to come
+up with a small example where repeatedly going to the closest dot does not
+result in finding the shortest path for eating all the dots.
+
+A: Given the greedy approach of the algorithm, the ClosestDotSearchAgent prioritizes the nearest food dot without considering the broader layout of the maze. This can lead to suboptimal solutions because the agent may make decisions that appear best locally but are inefficient the longer it goes on. The agent's path can become longer if it eats food that leads it into a less advantageous position. For example, in a maze with walls and multiple food items, the agent might keep going back and forth between food items, increasing the total travel distance unnecessarily. I.e.
+  123456789ABCDEF
+1 ###############
+2 #    F        #
+3 ##### #########
+4 #   P   F     #
+5 #             #
+6 #           F #
+7 ###############
+Where Starting at P(5,4) it will eat the closest Food F(9,4) followed by F(5,2) then finally F(D,6) which might not be optimal
