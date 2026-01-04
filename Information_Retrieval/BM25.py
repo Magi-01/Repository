@@ -8,11 +8,13 @@ import ast
 
 from sklearn.model_selection import train_test_split
 
-df = pd.read_csv("/home/fadhla/Documents/School/Repository/Information Retrieval/openalex_papers4.csv").fillna('').reset_index(drop=True)
+df = pd.read_csv("openalex_papers4.csv").fillna('').reset_index(drop=True)
+stop_words = set(stopwords.words("english"))
 
 class BM25:
     def __init__(self, frq, sd, avgwdl, k1, b, N, n_qt):
         """
+            The following are numpy array/vectors
             frq: Frequency of word in document D,
             sd: size of document (in words),
             avgwdl: average documents length in corpus(/collection),
@@ -46,8 +48,7 @@ class BM25:
     def formula(self):
         return np.sum(self.Idf() * self.Tf(), axis=0, dtype=np.float64)
 
-#______________________________________________#
-stop_words = set(stopwords.words("english"))
+#_______________________________________________________________________#
 
 def parse_concepts(concepts):
     if pd.isna(concepts) or concepts == '':
@@ -62,14 +63,16 @@ def concept_overlap(query_concepts, doc_concepts):
         return 0
     return len(set(query_concepts) & set(doc_concepts)) / len(set(query_concepts))
 
-df["concepts_list"] = df["concepts"].apply(parse_concepts)
-
 def tokenize(text):
     tokens = word_tokenize(text.lower())
     return [
         t for t in tokens
         if t.isalpha() and t not in stop_words
     ]
+
+#________________________________________________________________________#
+
+df["concepts_list"] = df["concepts"].apply(parse_concepts)
 
 df["tokens"] = df["abstract_text"].fillna("").apply(tokenize)
 
@@ -138,8 +141,12 @@ if __name__ == "__main__":
     query_df, _ = train_test_split(df, test_size=0.2, random_state=42)
 
     for i, query_row in query_df.iterrows():
-        query_terms = query_row["tokens"]
+        query_terms = query_row.get("tokens", [])
+        if len(query_terms) == 0:
+            continue
+
         query_concepts = query_row.get("concepts_list", [])
+
 
         frq = np.array([[doc.get(term, 0) for doc in doc_term_counts] for term in query_terms])
         n_qt = np.array([sum(term in doc for doc in doc_term_counts) for term in query_terms]).reshape(-1,1)
@@ -148,8 +155,8 @@ if __name__ == "__main__":
         scores = bm25.formula()
 
         # Concept boost
-        concept_scores = df["concepts_list"].apply(lambda x: concept_overlap(query_concepts, x))
-        final_scores = scores * (1 + 0 * concept_scores)
+        #concept_scores = df["concepts_list"].apply(lambda x: concept_overlap(query_concepts, x))
+        final_scores = scores * (1)
 
         # Rank documents
         ranked_indices = np.argsort(final_scores)[::-1]
