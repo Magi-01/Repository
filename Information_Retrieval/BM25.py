@@ -35,7 +35,7 @@ class BM25:
     def Idf(self):
         upper = self.N - self.n_qt + 0.5
         lower = self.n_qt + 0.5
-        return np.log(upper / lower)
+        return np.log(1 + (upper / lower)) # In case of frequent terms 
 
     def Tf(self):
         upper = self.frq
@@ -132,10 +132,10 @@ if __name__ == '__main__':
 """
 
 if __name__ == "__main__":
-    precision_hits = 0
-    recall_hits = 0
-    reciprocal_ranks = []
     top_k = 10
+
+    hit_at_k = 0
+    reciprocal_ranks = []
 
     doc_term_counts = df["tokens"].apply(Counter)
     query_df, _ = train_test_split(df, test_size=0.2, random_state=42)
@@ -161,21 +161,13 @@ if __name__ == "__main__":
         # Rank documents
         ranked_indices = np.argsort(final_scores)[::-1]
 
-        # Find rank of the correct document
-        correct_index = df.index.get_loc(query_row.name)
-        rank_position = np.where(ranked_indices == correct_index)[0][0] + 1  # 1-based
+        # --- Rank of the original document ---
+        rank_position = np.where(ranked_indices == q_idx)[0][0] + 1
 
-        # Metrics
         if rank_position <= top_k:
-            precision_hits += 1
-            recall_hits += 1  # only one relevant doc
+            hit_at_k += 1
+
         reciprocal_ranks.append(1 / rank_position)
 
-    # Compute final metrics
-    precision_at_k = precision_hits / len(query_df)
-    recall_at_k = recall_hits / len(query_df)
-    mrr = np.mean(reciprocal_ranks)
-
-    print(f"Precision@{top_k}: {precision_at_k:.4f}")
-    print(f"Recall@{top_k}: {recall_at_k:.4f}")
-    print(f"Mean Reciprocal Rank (MRR): {mrr:.4f}")
+    print(f"Hit@{top_k}: {hit_at_k / len(query_df):.4f}")
+    print(f"Mean Reciprocal Rank (MRR): {np.mean(reciprocal_ranks):.4f}")
