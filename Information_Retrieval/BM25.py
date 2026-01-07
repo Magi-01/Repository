@@ -4,15 +4,23 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
 import numpy as np
-import ast
+import pickle
+import os
+import matplotlib.pyplot as plt
+import time
 
 from sklearn.model_selection import train_test_split
 
-df = pd.read_csv("openalex_papers4.csv").fillna('').reset_index(drop=True)
-stop_words = set(stopwords.words("english"))
+# For saving inverted index
+INDEX_PATH = "inv_index.pkl"
 
+# Take data from csv and construct a dataframe, sanity check for empty rows
+df = pd.read_csv("openalex_papers5.csv").fillna('').reset_index(drop=True)
+
+# Common stop symbols in the english lexicon
+stop_words = set(stopwords.words("english"))
 class BM25:
-    def __init__(self, frq, sd, avgwdl, k1, b, N, n_qt):
+    def __init__(self, index, k1, b):
         """
             The following are numpy array/vectors
             frq: Frequency of word in document D,
@@ -24,45 +32,38 @@ class BM25:
             n_qt: Number of documents containing query term
         """
 
-        self.frq = frq
-        self.sd = sd
-        self.avgwdl = avgwdl
+        self.postings = index["postings"]
+        self.doc_len  = index["doc_len"]
+        self.N        = index["N"]
+        self.avgdl    = index["avgdl"]
         self.k1 = k1
         self.b = b
-        self.N = N
-        self.n_qt = n_qt
 
-    def Idf(self):
-        upper = self.N - self.n_qt + 0.5
-        lower = self.n_qt + 0.5
-        return np.log(1 + (upper / lower)) # In case of frequent terms 
+    def Idf(self, n_qt):
+        return np.log(1 + (self.N / n_qt))
 
-    def Tf(self):
-        upper = self.frq
-        lower = self.frq + self.k1 * (
-            1 - self.b + self.b * (self.sd / self.avgwdl)
+    def Tf(self, tf, dl):
+        return tf*(self.k1 + 1) / (
+            tf + self.k1 * (1 - self.b + self.b * dl / self.avgdl)
         )
-        return upper / lower
 
 
-    def formula(self):
-        return np.sum(self.Idf() * self.Tf(), axis=0, dtype=np.float64)
+    def formula(self, query_terms):
+        scores = defaultdict(float)
 
-#_______________________________________________________________________#
+        for term in query_terms:
+            postings = self.postings.get(term)
+            if not postings:
+                continue
 
-def parse_concepts(concepts):
-    if pd.isna(concepts) or concepts == '':
-        return []
-    try:
-        return ast.literal_eval(concepts)
-    except:
-        return [concepts]
+            n_q = len(postings)
+            idf = self.Idf(n_q)
+
+            for doc_id, tf in postings.items():
+                dl = self.doc_len[doc_id]
+                scores[doc_id] += idf * self.Tf(tf, dl)
+        return dict(scores)
     
-def concept_overlap(query_concepts, doc_concepts):
-    if not query_concepts or not doc_concepts:
-        return 0
-    return len(set(query_concepts) & set(doc_concepts)) / len(set(query_concepts))
-
 def tokenize(text):
     tokens = word_tokenize(text.lower())
     return [
@@ -70,104 +71,150 @@ def tokenize(text):
         if t.isalpha() and t not in stop_words
     ]
 
-#________________________________________________________________________#
+    
+def inverted_index(df):
+    postings = defaultdict(dict)
+    doc_len = {}
 
-df["concepts_list"] = df["concepts"].apply(parse_concepts)
+    for doc_id, tokens in enumerate(df["tokens"]):
+        doc_len[doc_id] = len(tokens)
 
-df["tokens"] = df["abstract_text"].fillna("").apply(tokenize)
+        for term in tokens:
+            postings[term][doc_id] = postings[term].get(doc_id, 0) + 1
+    
+    N = len(df)
+    avgwdl = sum(doc_len.values()) / N
 
-df["sd"] = df["tokens"].apply(len)
+    return {
+        "postings": dict(postings),
+        "doc_len": doc_len,
+        "N": N,
+        "avgdl": avgwdl
+    }
 
-sd = df["sd"].values.reshape(1, -1)   # (1, n_docs)
-avgwdl = df["sd"].mean()
-N = len(df)
+def save_index(index, file_path = "inv_index.pkl"):
+    with open(file_path, "wb") as f:
+        pickle.dump(index, f)
 
+def load_index(file_path):
+    with open(file_path, "rb") as f:
+        index = pickle.load(f)
+    return index
+
+df["tokens"] = df["abstract_text"].apply(
+    lambda inv: list(inv.keys()) if isinstance(inv, dict) else []
+)
+
+if os.path.exists(INDEX_PATH):
+    invert_idx = load_index(INDEX_PATH)
+else:
+    invert_idx = inverted_index(df)
+    save_index(invert_idx, INDEX_PATH)
+top_k = 10
+
+hit_at_k = 0
+total_precision = []
+total_recall = []
+
+query_df, _ = train_test_split(df, test_size=0.2, random_state=42)
+ground_truth = {i: {i} for i in query_df.index}
 """
-if __name__ == '__main__':
-    query = input("What is your Query? \n")
-    query_terms = tokenize(query)
+doc_term_counts = df["tokens"].apply(Counter)
+bm25 = BM25(invert_idx, k1=1.5, b=0.75)
 
-    concept = input("Do you want to include concepts? \n")
-    concept_terms = tokenize(concept) if concept else None
+for q_idx, query_row in query_df.iterrows():
+    query_terms = query_row.get("tokens", [])
+    if not query_terms:
+        continue
 
-    doc_term_counts = df["tokens"].apply(Counter)
+    scores = bm25.formula(query_terms)  # dict doc_id -> score
+    ranked_docs = sorted(scores, key=scores.get, reverse=True)[:top_k]
 
-    frq = np.array([
-        [doc.get(term, 0) for doc in doc_term_counts]
-        for term in query_terms
-    ])
+    relevant_docs = ground_truth.get(q_idx, set())
 
-    n_qt = np.array([
-        sum(term in doc for doc in doc_term_counts)
-        for term in query_terms
-    ]).reshape(-1, 1)
+    retrieved_relevant = len(set(ranked_docs) & relevant_docs)
 
-    bm25 = BM25(
-        frq=frq,
-        sd=sd,
-        avgwdl=avgwdl,
-        k1=1.5,
-        b=0.75,
-        N=N,
-        n_qt=n_qt
-    )
+    precision = retrieved_relevant / top_k
+    recall = retrieved_relevant / len(relevant_docs) if relevant_docs else 0
 
-    scores = bm25.formula()    # (n_docs,)
-    df["bm25_score"] = scores
+    total_precision.append(precision)
+    total_recall.append(recall)
 
-    alpha = 0
-    if concept_terms:
-        df["concept_score"] = df["concepts_list"].apply(lambda x: concept_overlap(concept_terms, x))
-        alpha = 0.3
-    else:
-        df["concept_score"] = 1  # no boost
+mean_precision = np.mean(total_precision)
+mean_recall = np.mean(total_recall)
 
-    # final score
-    df["final_score"] = df["bm25_score"] * (1 + alpha * df["concept_score"])
+print(f"Mean Precision@{top_k}: {mean_precision:.4f}")
+print(f"Mean Recall@{top_k}: {mean_recall:.4f}")
 
-    df = df.sort_values("final_score", ascending=False)
-    pd.set_option('display.max_colwidth', None)
-    print(df.loc[df["final_score"] > 0, ["title", "year", "final_score"]].head(10))
-    print(df.loc[df["final_score"] > 0, ["title", "year", "final_score"]].shape[0]," documents found out of ", df.shape[0])
-"""
+def precision_recall_curve(bm25, query_df, ground_truth):
+    all_precisions = []
+    all_recalls = []
 
-if __name__ == "__main__":
-    top_k = 10
-
-    hit_at_k = 0
-    reciprocal_ranks = []
-
-    doc_term_counts = df["tokens"].apply(Counter)
-    query_df, _ = train_test_split(df, test_size=0.2, random_state=42)
-
-    for i, query_row in query_df.iterrows():
+    for q_idx, query_row in query_df.iterrows():
         query_terms = query_row.get("tokens", [])
-        if len(query_terms) == 0:
+        if not query_terms:
             continue
 
-        query_concepts = query_row.get("concepts_list", [])
+        scores = bm25.formula(query_terms)  # dict: doc_id -> score
+        if not scores:
+            continue
 
+        # Sort docs by score descending
+        ranked_docs = sorted(scores, key=scores.get, reverse=True)
+        relevant_docs = ground_truth.get(q_idx, set())
+        if not relevant_docs:
+            continue
 
-        frq = np.array([[doc.get(term, 0) for doc in doc_term_counts] for term in query_terms])
-        n_qt = np.array([sum(term in doc for doc in doc_term_counts) for term in query_terms]).reshape(-1,1)
+        retrieved_relevant = 0
+        precisions = []
+        recalls = []
 
-        bm25 = BM25(frq, sd, avgwdl, k1=1.5, b=0.75, N=N, n_qt=n_qt)
-        scores = bm25.formula()
+        for i, doc_id in enumerate(ranked_docs, start=1):
+            if doc_id in relevant_docs:
+                retrieved_relevant += 1
+            precisions.append(retrieved_relevant / i)
+            recalls.append(retrieved_relevant / len(relevant_docs))
 
-        # Concept boost
-        #concept_scores = df["concepts_list"].apply(lambda x: concept_overlap(query_concepts, x))
-        final_scores = scores * (1)
+        all_precisions.append(precisions)
+        all_recalls.append(recalls)
 
-        # Rank documents
-        ranked_indices = np.argsort(final_scores)[::-1]
+    # Average precision at each recall point (simple approach: interpolate)
+    # First, find the max length of any ranking
+    max_len = max(len(p) for p in all_precisions)
 
-        # --- Rank of the original document ---
-        rank_position = np.where(ranked_indices == q_idx)[0][0] + 1
+    # Pad shorter rankings with last precision/recall
+    for i in range(len(all_precisions)):
+        last_p = all_precisions[i][-1]
+        last_r = all_recalls[i][-1]
+        if len(all_precisions[i]) < max_len:
+            all_precisions[i] += [last_p] * (max_len - len(all_precisions[i]))
+            all_recalls[i] += [last_r] * (max_len - len(all_recalls[i]))
 
-        if rank_position <= top_k:
-            hit_at_k += 1
+    mean_precision = np.mean(all_precisions, axis=0)
+    mean_recall = np.mean(all_recalls, axis=0)
 
-        reciprocal_ranks.append(1 / rank_position)
+    # Plot
+    plt.figure(figsize=(6,4))
+    plt.plot(mean_recall, mean_precision, marker='o')
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curve")
+    plt.grid(True)
+    plt.show()
+precision_recall_curve(bm25, query_df, ground_truth)
+"""
 
-    print(f"Hit@{top_k}: {hit_at_k / len(query_df):.4f}")
-    print(f"Mean Reciprocal Rank (MRR): {np.mean(reciprocal_ranks):.4f}")
+query = "kernel ridge regression"
+
+query_terms = tokenize(query)
+bm25 = BM25(invert_idx, k1=1.5, b=0.75)
+scores = bm25.formula(query_terms)
+
+df["score"] = df.index.map(scores).fillna(0)
+
+df = df.sort_values("score", ascending=False)
+pd.set_option('display.max_colwidth', None)
+
+print(df.loc[df["score"] > 0, ["id", "title", "year", "score", "abstract_text"]].head(10))
+
+print(df.loc[df["score"] > 0, ["id", "title", "year", "score"]].shape[0]," documents found out of ", df.shape[0])
