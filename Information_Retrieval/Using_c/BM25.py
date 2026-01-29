@@ -5,8 +5,7 @@ import numpy as np
 import ast
 import ctypes
 import os
-
-from sklearn.model_selection import train_test_split
+from nltk import PorterStemmer, WordNetLemmatizer
 
 stop_words = set(stopwords.words("english"))
 
