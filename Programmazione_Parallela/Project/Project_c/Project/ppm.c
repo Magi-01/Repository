@@ -14,7 +14,7 @@
 #include <windows.h>
 #include <omp.h>
 
-PPMImage *parse_ppm(const char *filename, const float width, const float height) {
+PPMImage *parse_ppm(const char *filename) {
     // Open the file (.txt) in read mode
     FILE *file = fopen(filename, "r");
     if (!file) {

@@ -39,7 +39,7 @@ typedef struct __attribute__((packed)) {
 } PPMImage;
 
 // Function to parse the PPM file
-PPMImage *parse_ppm(const char *file_path, const float width, const float height);
+PPMImage *parse_ppm(const char *file_path);
 
 // Function to check file values
 void print_ppm_data(PPMImage *image);
