@@ -1,2 +1,0 @@
-# Programmazione
-Programmazione di C
