@@ -1,0 +1,206 @@
+\documentclass[a4paper,12pt]{report}
+
+% Packages
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\begin{document}
+
+% -------------------
+% Title Page
+% -------------------
+\title{Hybrid Constraint Satisfaction and Markov Decision Process Framework for Delivery Scheduling under Uncertainty}
+\author{Your Name}
+\date{\today}
+\maketitle
+
+% -------------------
+% Preface & Acknowledgement
+% -------------------
+\chapter*{Preface and Acknowledgements}
+This thesis is submitted in partial fulfillment of the requirements for the degree of \dots \\
+I would like to thank \dots
+
+% -------------------
+% Abstract
+% -------------------
+\chapter*{Abstract}
+This thesis investigates the optimization of delivery scheduling in uncertain environments 
+by integrating Constraint Satisfaction Problems (CSPs) and Markov Decision Processes (MDPs). 
+The hybrid approach aims to minimize lateness, reduce resource usage, and maintain feasibility 
+with respect to hard operational constraints. CSPs are used to enforce strict scheduling 
+constraints such as capacity limits and delivery time windows, while MDPs capture stochastic 
+elements such as uncertain travel times and dynamic order arrivals. The proposed hybrid 
+framework applies exact Value Iteration on small-scale toy scenarios and employs 
+Monte Carlo rollout methods for large-scale delivery simulations. Experimental evaluation 
+compares baseline CSP-only methods with the hybrid approach, demonstrating improved robustness 
+and adaptability under uncertainty.
+
+% -------------------
+% Table of Contents
+% -------------------
+\tableofcontents
+
+% -------------------
+% Introduction
+% -------------------
+\chapter{Introduction}
+Efficient delivery scheduling is a central challenge in logistics and warehouse operations. 
+Traditional optimization approaches often assume deterministic travel times and static order sets, 
+yet real-world systems are inherently uncertain. Factors such as traffic conditions, 
+vehicle breakdowns, and last-minute orders make robust scheduling difficult. 
+
+This thesis addresses the problem by combining two complementary approaches:
+\begin{itemize}
+    \item Constraint Satisfaction Problems (CSPs) to enforce hard scheduling constraints.
+    \item Markov Decision Processes (MDPs) to model stochastic decision-making under uncertainty.
+\end{itemize}
+
+The key research question is: \emph{How can a hybrid CSP--MDP framework improve 
+delivery scheduling performance under uncertain conditions?}
+
+% -------------------
+% Literature Review
+% -------------------
+\chapter{Literature Review}
+Relevant work spans three domains: 
+\begin{enumerate}
+    \item CSP-based scheduling and routing methods (e.g., vehicle routing with time windows).
+    \item Markov Decision Process methods for uncertain planning.
+    \item Hybrid AI methods that combine deterministic optimization with probabilistic models.
+\end{enumerate}
+
+This thesis builds on these ideas by applying them specifically to delivery systems.
+
+% -------------------
+% Methodology
+% -------------------
+\chapter{Methodology}
+
+\section{Constraint Satisfaction Model}
+We define binary assignment variables:
+\[
+x_{v,i} =
+\begin{cases}
+1 & \text{if vehicle $v$ serves order $i$}, \\
+0 & \text{otherwise.}
+\end{cases}
+\]
+
+Constraints:
+\begin{align}
+\sum_{v} x_{v,i} &= 1 \quad \forall i \in \mathcal{C} \quad \text{(each order assigned)} \\
+\sum_{i \in \sigma_v} q_i &\le Q_v \quad \forall v \quad \text{(capacity)} \\
+a_i \le t_i &\le b_i - s_i \quad \forall i \quad \text{(time windows)}
+\end{align}
+
+Objective function:
+\[
+\min \; \sum_{i} w^{(L)} \max(0, t_i + s_i - d_i) 
++ w^{(D)} \sum_{v} \text{dist}(\sigma_v) 
++ w^{(R)} \cdot \#\text{vehicles}
+\]
+
+\section{Markov Decision Process Model}
+An MDP is defined by the tuple 
+\((S, A, P, R, \gamma)\):
+\begin{itemize}
+    \item States \(s \in S\): vehicle positions, pending orders, current time.
+    \item Actions \(a \in A(s)\): continue, reroute, reassign, wait, drop order.
+    \item Transitions: 
+    \[
+    P(s'|s,a) = \Pr(\text{next state } s' \mid s, a)
+    \]
+    \item Reward function:
+    \[
+    R(s,a) = - \left( \alpha \cdot \text{lateness} 
+    + \beta \cdot \text{travel cost}
+    + \gamma \cdot \mathbf{1}_{\text{dropped}} \right)
+    \]
+\end{itemize}
+
+
+\section{Hybridization Approaches}
+Three approaches are considered:
+\begin{enumerate}
+    \item \textbf{Sequential Hybrid}: CSP generates a baseline plan, MDP handles local disruptions.
+    \item \textbf{Coupled Iterative Hybrid}: MDP simulates futures, CSP reoptimizes with sampled scenarios.
+    \item \textbf{Constraint-Guided Policy}: MDP proposes actions, CSP filters infeasible ones.
+\end{enumerate}
+
+\section{Value Iteration for Small Instances}
+The Bellman optimality equation:
+\[
+V^*(s) = \max_{a \in A(s)} \Big[ R(s,a) + \gamma \sum_{s'} P(s'|s,a) V^*(s') \Big]
+\]
+
+\begin{algorithm}[h!]
+\caption{Value Iteration}
+\begin{algorithmic}
+\STATE Initialize $V(s)=0$ for all states $s$
+\REPEAT
+    \STATE $\Delta \gets 0$
+    \FOR{each state $s$}
+        \STATE $v \gets V(s)$
+        \STATE $V(s) \gets \max_{a \in A(s)} 
+        \Big( R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s') \Big)$
+        \STATE $\Delta \gets \max(\Delta, |v - V(s)|)$
+    \ENDFOR
+\UNTIL{$\Delta < \theta$}
+\STATE Derive policy: $\pi(s) = \arg\max_{a \in A(s)} [ \cdots ]$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Monte Carlo Rollout for Large Instances}
+For large-scale delivery, exact value iteration is infeasible.
+Monte Carlo rollout approximates the Bellman update by sampling:
+
+\[
+Q(s,a) \approx \frac{1}{N} \sum_{i=1}^N 
+\left( R(s,a) + \gamma V(s'_i) \right)
+\]
+
+where $s'_i$ are sampled next states under $(s,a)$.
+
+---
+
+% -------------------
+% Results
+% -------------------
+\chapter{Results}
+\begin{itemize}
+    \item \textbf{Toy Case Study}: Exact Value Iteration for 1 vehicle, 3 deliveries.
+    \item \textbf{Large Simulation}: Monte Carlo rollout with 20--50 deliveries.
+    \item Compare baseline CSP-only vs hybrid CSP+MDP.
+\end{itemize}
+
+% -------------------
+% Discussion
+% -------------------
+\chapter{Discussion}
+The sequential hybrid was computationally efficient but limited in adaptability.
+Monte Carlo rollout enabled scalable decision-making with reduced lateness, 
+though at the cost of increased runtime.
+
+% -------------------
+% Conclusion
+% -------------------
+\chapter{Conclusion}
+This thesis demonstrated a hybrid CSP--MDP approach to delivery scheduling under uncertainty. 
+Exact value iteration provided a benchmark on small cases, while Monte Carlo rollout enabled 
+scalable solutions. Future work includes integrating reinforcement learning and more 
+sophisticated stochastic models.
+
+% -------------------
+% References
+% -------------------
+\chapter*{References}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

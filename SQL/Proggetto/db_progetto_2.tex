@@ -1,0 +1,587 @@
+\documentclass{article}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{lipsum}
+\usepackage{listings}
+\usepackage{graphicx}
+
+\geometry{a4paper, margin=1in}
+
+\title{DataBase Project}
+\author{Mutua Fadhla Mohamed | SM3201434}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Description of what the database does}
+
+This database manages a game world where players, NPCs (non-player characters), and quests interact. 
+Players can join guilds, complete quests, and earn achievements that unlock dimensions. 
+NPCs can belong to guilds and initiate quests. The database ensures data integrity and proper relationships 
+between entities using triggers and constraints.
+
+\section{Queries}
+
+\subsection{Triggers}
+
+\subsection{lock\_achievements\_if\_invalid\_item}
+
+\texttt{General Description:} This trigger locks all achievements for a player if any of the player's items
+become invalid (state is false).
+
+\begin{lstlisting}[language=SQL]
+CREATE TRIGGER lock_achievements_if_invalid_item
+AFTER UPDATE ON Player_Item
+FOR EACH ROW
+BEGIN
+    DECLARE player_achievements_locked BOOLEAN DEFAULT FALSE;
+
+    -- Check if any item for the player is invalid
+    IF EXISTS (SELECT 1 FROM Player_Item
+        WHERE player_id = NEW.player_id AND state = FALSE) THEN
+        SET player_achievements_locked = TRUE;
+    END IF;
+
+    -- Create a temporary table to hold achievement IDs
+    CREATE TEMPORARY TABLE Temp_Achievements AS
+    SELECT ca.achievement_id
+    FROM Check_Achievement ca
+    JOIN Complete c ON c.quest_id = ca.quest_id
+    WHERE c.player_id = NEW.player_id;
+
+    -- Update the achievement status based on item state
+    UPDATE Check_Achievement
+    SET requires_all_player_items = NOT player_achievements_locked
+    WHERE achievement_id IN (SELECT achievement_id FROM Temp_Achievements);
+
+    -- Drop the temporary table
+    DROP TEMPORARY TABLE Temp_Achievements;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE TRIGGER lock_achievements_if_invalid_item|: Defines a new trigger named \linebreak \lstinline|lock_achievements_if_invalid_item|.
+    \item \lstinline|AFTER UPDATE ON Player_Item|: Specifies that this trigger will be executed after \linebreak an update operation on the \lstinline|Player_Item| table.
+    \item \lstinline|FOR EACH ROW|: Indicates that the trigger will be executed for each row that is being updated.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the trigger.
+    \item \lstinline|DECLARE player_achievements_locked BOOLEAN DEFAULT FALSE|: Declares a variable \linebreak \lstinline|player_achievements_locked| and initializes it to \lstinline|FALSE|.
+    \item \lstinline|IF EXISTS (SELECT 1 FROM Player_Item| \linebreak \lstinline|WHERE player_id = NEW.player_id AND state = FALSE) THEN|: Checks if any item for the player is invalid (state is false).
+    \item \lstinline|SET player_achievements_locked = TRUE|: If any invalid item is found, set the variable \linebreak \lstinline|player_achievements_locked| to \lstinline|TRUE|.
+    \item \lstinline|CREATE TEMPORARY TABLE Temp_Achievements AS SELECT ca.achievement_id| \linebreak \lstinline|FROM Check_Achievement ca JOIN Complete c ON c.quest_id = ca.quest_id| \linebreak \lstinline|WHERE c.player_id = NEW.player_id|: Creates a temporary table to hold achievement IDs for the player.
+    \item \lstinline|UPDATE Check_Achievement SET requires_all_player_items = NOT player_achievements_locked| \linebreak \lstinline|WHERE achievement_id IN (SELECT achievement_id FROM Temp_Achievements)|: \linebreak Updates the achievement status based on the item state.
+    \item \lstinline|DROP TEMPORARY TABLE Temp_Achievements|: Drops the temporary table.
+    \item \lstinline|END|: Ends the trigger.
+\end{itemize}
+
+\subsection{unlock\_dimension}
+
+\texttt{General Description:} This trigger unlocks dimensions for a player if all their achievements are true.
+
+\begin{lstlisting}[language=SQL]
+CREATE TRIGGER unlock_dimension
+AFTER UPDATE ON Complete
+FOR EACH ROW
+BEGIN
+    DECLARE all_achievements_true BOOLEAN;
+    DECLARE player_id INT;
+    SET player_id = NEW.player_id;
+
+    SELECT COUNT(*) = 0 INTO all_achievements_true
+    FROM Achievement
+    JOIN Check_Achievement ON Achievement.achievement_id = Check_Achievement.achievement_id
+    WHERE Check_Achievement.requires_all_player_items = TRUE
+    AND Check_Achievement.quest_id NOT IN (
+        SELECT quest_id
+        FROM Complete
+        WHERE player_id = player_id
+    );
+
+    IF all_achievements_true THEN
+        INSERT IGNORE INTO Travel (player_id, dimension_id)
+        SELECT player_id, dimension_id
+        FROM Unlocks;
+    END IF;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE TRIGGER unlock_dimension|: Defines a new trigger named \linebreak \lstinline|unlock_dimension|.
+    \item \lstinline|AFTER UPDATE ON Complete|: Specifies that this trigger will be executed after an update operation on the \lstinline|Complete| table.
+    \item \lstinline|FOR EACH ROW|: Indicates that the trigger will be executed for each row that is being updated.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the trigger.
+    \item \lstinline|DECLARE all_achievements_true BOOLEAN|: Declares a variable \lstinline|all_achievements_true|.
+    \item \lstinline|DECLARE player_id INT|: Declares a variable \lstinline|player_id|.
+    \item \lstinline|SET player_id = NEW.player_id|: Sets the \lstinline|player_id| to the ID of the player from the updated row.
+    \item \lstinline|SELECT COUNT(*) = 0 INTO all_achievements_true FROM Achievement| \linebreak \lstinline|JOIN Check_Achievement ON Achievement.achievement_id = Check_Achievement.achievement_id| \linebreak \lstinline|WHERE Check_Achievement.requires_all_player_items = TRUE AND| \linebreak \lstinline|Check_Achievement.quest_id NOT IN (SELECT quest_id FROM Complete| \linebreak \lstinline|WHERE player_id = player_id)|: \linebreak \lstinline|Checks if all achievements are true for the player.|
+    \item \lstinline|IF all_achievements_true THEN|: If all achievements are true, then proceed.
+    \item \lstinline|INSERT IGNORE INTO Travel (player_id, dimension_id)| \linebreak \lstinline|SELECT player_id, dimension_id FROM Unlocks|: Inserts records into the \lstinline|Travel| table to unlock dimensions for the player.
+    \item \lstinline|END IF|: Ends the conditional statement.
+    \item \lstinline|END|: Ends the trigger.
+\end{itemize}
+
+\subsection{assign\_quests\_after\_talk}
+
+\texttt{General Description:} This trigger assigns quests to a player based on their guild affiliation after talking to an NPC.
+
+\begin{lstlisting}[language=SQL]
+CREATE TRIGGER assign_quests_after_talk
+AFTER INSERT ON Talks
+FOR EACH ROW
+BEGIN
+    DECLARE npc_guild_id INT;
+    DECLARE player_guild_id INT;
+
+    SELECT guild_id INTO npc_guild_id FROM NPC WHERE npc_id = NEW.npc_id;
+    SELECT guild_id INTO player_guild_id FROM Player WHERE player_id = NEW.player_id;
+
+    -- If NPC has no guild affiliation and player has no guild, assign quest
+    IF npc_guild_id IS NULL AND player_guild_id IS NULL THEN
+        INSERT INTO Complete (player_id, quest_id)
+        SELECT NEW.player_id, quest_id
+        FROM Initiate
+        WHERE npc_id = NEW.npc_id
+        LIMIT 1;
+    END IF;
+
+    -- If NPC and player have the same guild affiliation, assign quest
+    IF npc_guild_id = player_guild_id THEN
+        INSERT INTO Complete (player_id, quest_id)
+        SELECT NEW.player_id, quest_id
+        FROM Initiate
+        WHERE npc_id = NEW.npc_id
+        LIMIT 1;
+    END IF;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE TRIGGER assign_quests_after_talk|: Defines a new trigger named \linebreak \lstinline|assign_quests_after_talk|.
+    \item \lstinline|AFTER INSERT ON Talks|: Specifies that this trigger will be executed after an insert operation on the \lstinline|Talks| table.
+    \item \lstinline|FOR EACH ROW|: Indicates that the trigger will be executed for each row that is being inserted.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the trigger.
+    \item \lstinline|DECLARE npc_guild_id INT|: Declares a variable \lstinline|npc_guild_id|.
+    \item \lstinline|DECLARE player_guild_id INT|: Declares a variable \lstinline|player_guild_id|.
+    \item \lstinline|SELECT guild_id INTO npc_guild_id FROM NPC WHERE npc_id = NEW.npc_id|: Retrieves the guild ID of the NPC and stores it in \lstinline|npc_guild_id|.
+    \item \lstinline|SELECT guild_id INTO player_guild_id FROM Player WHERE player_id = NEW.player_id|: Retrieves the guild ID of the player and stores it in \lstinline|player_guild_id|.
+    \item \lstinline|IF npc_guild_id IS NULL AND player_guild_id IS NULL THEN|: Checks if both the NPC and player have no guild affiliation.
+    \item \lstinline|INSERT INTO Complete (player_id, quest_id)| \linebreak \lstinline|SELECT NEW.player_id, quest_id FROM Initiate WHERE npc_id = NEW.npc_id| \linebreak \lstinline|LIMIT 1|: Assigns a quest to the player.
+    \item \lstinline|END IF|: Ends the conditional statement.
+    \item \lstinline|IF npc_guild_id = player_guild_id THEN|: Checks if the NPC and player have the same guild affiliation.
+    \item \lstinline|INSERT INTO Complete (player_id, quest_id)| \linebreak \lstinline|SELECT NEW.player_id, quest_id FROM Initiate WHERE npc_id = NEW.npc_id| \linebreak \lstinline|LIMIT 1|: Assigns a quest to the player.
+    \item \lstinline|END IF|: Ends the conditional statement.
+    \item \lstinline|END|: Ends the trigger.
+\end{itemize}
+
+\subsection{Queries}
+
+\subsection{Essential Queries}
+
+\subsubsection{Test\_UpdatePlayerItem}
+
+\texttt{General Description:} This procedure tests updating player items to see if they remain true.
+
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE Test_UpdatePlayerItem()
+BEGIN
+    UPDATE Player_Item
+    SET state = TRUE
+    WHERE player_item_id IN (SELECT player_item_id FROM Player_Item LIMIT 5);
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE PROCEDURE Test_UpdatePlayerItem()|: Defines a stored procedure named \linebreak \lstinline|Test_UpdatePlayerItem|.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the procedure.
+    \item \lstinline|UPDATE Player_Item SET state = TRUE WHERE player_item_id IN| \linebreak \lstinline|(SELECT player_item_id FROM Player_Item LIMIT 5)|: Updates the state of the first five player items to \lstinline|TRUE|.
+    \item \lstinline|END|: Ends the procedure.
+\end{itemize}
+
+\subsubsection{Test\_InsertQuestCompletion}
+
+\texttt{General Description:} This procedure tests inserting quest completion records.
+
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE Test_InsertQuestCompletion()
+BEGIN
+    INSERT INTO Complete (player_id, quest_id)
+    VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE PROCEDURE Test_InsertQuestCompletion()|: Defines a stored procedure named \linebreak \lstinline|Test_InsertQuestCompletion|.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the procedure.
+    \item \lstinline|INSERT INTO Complete (player_id, quest_id) VALUES (1, 1), (2, 2), (3, 3),| \linebreak \lstinline|(4, 4), (5, 5)|: Inserts completion records for the specified player and quest IDs.
+    \item \lstinline|END|: Ends the procedure.
+\end{itemize}
+
+\subsubsection{ViewAllPlayerItemsDetailed}
+
+\texttt{General Description:} This query retrieves detailed information about all player items.
+
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE ViewAllPlayerItemsDetailed()
+BEGIN
+    SELECT pi.player_item_id, pi.player_id, pi.item_id, i.item_name, pi.state
+    FROM Player_Item pi
+    JOIN Item i ON pi.item_id = i.item_id;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE PROCEDURE ViewAllPlayerItemsDetailed()|: Defines a stored procedure named \linebreak \lstinline|ViewAllPlayerItemsDetailed|.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the procedure.
+    \item \lstinline|SELECT pi.player_item_id, pi.player_id, pi.item_id, i.item_name, pi.state| \linebreak \lstinline|FROM Player_Item pi JOIN Item i ON pi.item_id = i.item_id|: Selects detailed information about all player items, including item names and states.
+    \item \lstinline|END|: Ends the procedure.
+\end{itemize}
+
+\subsubsection{ViewAllQuestsDetailed}
+
+\texttt{General Description:} This query retrieves detailed information about all quests.
+
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE ViewAllQuestsDetailed()
+BEGIN
+    SELECT quest_id, quest_name, state
+    FROM Quest;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE PROCEDURE ViewAllQuestsDetailed()|: Defines a stored procedure named \linebreak \lstinline|ViewAllQuestsDetailed|.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the procedure.
+    \item \lstinline|SELECT quest_id, quest_name, state FROM Quest|: Selects detailed information about all quests, including their states.
+    \item \lstinline|END|: Ends the procedure.
+\end{itemize}
+
+\subsubsection{ViewAllCompletedQuestsDetailed}
+
+\texttt{General Description:} This query retrieves detailed information about all completed quests.
+
+\begin{lstlisting}[language=SQL]
+CREATE PROCEDURE ViewAllCompletedQuestsDetailed()
+BEGIN
+    SELECT c.player_id, p.player_name, q.quest_name, q.state
+    FROM Complete c
+    JOIN Player p ON c.player_id = p.player_id
+    JOIN Quest q ON c.quest_id = q.quest_id
+    ORDER BY p.player_id, q.quest_name;
+END;
+\end{lstlisting}
+
+\texttt{Line-by-Line Explanation:}
+\begin{itemize}
+    \item \lstinline|CREATE PROCEDURE ViewAllCompletedQuestsDetailed()|: Defines a stored procedure named \linebreak \lstinline|ViewAllCompletedQuestsDetailed|.
+    \item \lstinline|BEGIN|: Starts the block of SQL statements that make up the procedure.
+    \item \lstinline|SELECT c.player_id, p.player_name, q.quest_name, q.state FROM Complete c| \linebreak \lstinline|JOIN Player p ON c.player_id = p.player_id| \linebreak \lstinline|JOIN Quest q ON c.quest_id = q.quest_id| \linebreak \lstinline|ORDER BY p.player_id, q.quest_name|: Selects detailed information about all completed quests, including player names and quest states.
+    \item \lstinline|END|: Ends the procedure.
+\end{itemize}
+
+\begin{itemize}
+    \item ViewNPCGuilds: Retrieves and displays NPCs along with their guild names, defaulting to an empty string if they do not belong to a guild.
+\end{itemize}
+
+\section{Conceptual schema}
+
+\subsection{Entities and Attributes}
+
+\begin{longtable}{|>{\raggedright}m{0.3\textwidth}|>{\raggedright\arraybackslash}m{0.6\textwidth}|}
+\hline
+\textbf{Entity} & \textbf{Description} \\
+\hline
+\endfirsthead
+\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\textbf{Entity} & \textbf{Description} \\
+\hline
+\endhead
+\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline
+\endfoot
+\hline
+\endlastfoot
+Player & Represents players in the game. \\
+\hline
+NPC & Represents non-player characters. \\
+\hline
+Guild & Represents guilds. \\
+\hline
+Quest & Represents quests. \\
+\hline
+Achievement & Represents achievements. \\
+\hline
+Dimension & Represents dimensions. \\
+\hline
+Item & Represents items. \\
+\hline
+Player\_Item & Represents items owned by players. \\
+\hline
+\end{longtable}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{C:/Users/mutua/Documents/Repository/SQL/Proggetto/vcs.png}
+    \caption{Conceptual schema}
+    \label{fig:conceptual_schema}
+\end{figure}
+
+\subsection{Relationships}
+
+\subsection{Relationship Descriptions}
+
+\begin{itemize}
+    \item \lstinline|player-complete-quest|: This relationship indicates that a player has completed a specific quest.
+    \item \lstinline|player-talks-npc|: This relationship records interactions between players and NPCs.
+    \item \lstinline|player-belong-guild|: This relationship denotes which guild a player belongs to.
+    \item \lstinline|player-own-player_item|: This relationship indicates which items are owned by a player.
+    \item \lstinline|player-travel-dimension|: This relationship indicates the dimensions a player has traveled to.
+    \item \lstinline|guild-affiliated-npc|: This relationship indicates the affiliation between guilds and NPCs.
+    \item \lstinline|npc-initiate-quest|: This relationship denotes the quests initiated by NPCs.
+    \item \lstinline|quest-check-achievement|: This relationship indicates the quests that are required for achieving specific achievements.
+    \item \lstinline|quest-check-player_item|: This relationship indicates the quests that require specific player items.
+    \item \lstinline|player_item-check-achievement|: This relationship indicates which player items are checked for achievements.
+    \item \lstinline|player_item-refers-item|: This relationship denotes which items are referred to by player items.
+    \item \lstinline|achievement-unlocks-dimension|: This relationship indicates which achievements unlock specific dimensions.
+\end{itemize}
+
+\begin{longtable}{|>{\raggedright}m{0.3\textwidth}|>{\centering}m{0.3\textwidth}|>{\raggedright\arraybackslash}m{0.3\textwidth}|}
+\hline
+\textbf{Entity (0/1;1/n)} & \textbf{Relationship} & \textbf{Entity (0/1;1/n)} \\
+\hline
+\endfirsthead
+\multicolumn{3}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\textbf{Entity (0/1;1/n)} & \textbf{Relationship} & \textbf{Entity (0/1;1/n)} \\
+\hline
+\endhead
+\hline \multicolumn{3}{|r|}{{Continued on next page}} \\ \hline
+\endfoot
+\hline
+\endlastfoot
+Player (0/1) & Complete & Quest (1/n) \\
+\hline
+Player (0/1) & Talks & NPC (1/n) \\
+\hline
+Player (0/n) & Belong & Guild (1/1) \\
+\hline
+Player (0/1) & Own & Player\_Item (0/n) \\
+\hline
+Player (0/1) & Travel & Dimension (1/n) \\
+\hline
+Guild (0/1) & Affiliated & NPC (1/n) \\
+\hline
+NPC (0/1) & Initiate & Quest (1/n) \\
+\hline
+Quest (0/1) & Check Achievement & Achievement (1/n) \\
+\hline
+Quest (0/1) & Check Player\_Item & Player\_Item (1/n) \\
+\hline
+Player\_Item (0/1) & Check Achievement & Achievement (1/n) \\
+\hline
+Player\_Item (0/1) & Refers & Item (1/n) \\
+\hline
+Achievement (0/1) & Unlocks & Dimension (1/n) \\
+\hline
+\end{longtable}
+
+\section{Detailed Redundancy Analysis}
+
+\begin{itemize}
+    \item \textbf{Player\_Item and Quest:}
+    \begin{itemize}
+        \item \textbf{Redundancy in Checking Items and Achievements:}
+        \begin{itemize}
+            \item Quest table includes attributes to check player items and achievements.
+            \item Player\_Item also checks achievements, leading to redundancy.
+            \item Separate tables are used to check relationships between quests, items, and achievements, causing overlapping data.
+        \end{itemize}
+        \item \textbf{Overlapping Attributes:}
+        \begin{itemize}
+            \item Quest and Check\_Achievement both reference achievement requirements for quests.
+            \item Player\_Item and Check\_Achievement both reference player item checks.
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{Guild and NPC:}
+    \begin{itemize}
+        \item \textbf{Redundant Relationships:}
+        \begin{itemize}
+            \item Guild-Affiliated-NPC and Player-Belong-Guild relationships overlap.
+            \item Information about guild affiliation is duplicated.
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\section{Removal/addition caused by redundancy analysis}
+
+\begin{itemize}
+    \item Removal of Overlapping Attributes:
+    \begin{itemize}
+        \item Merged the relationships between Quest, Player\_Item, and Check\_Achievement into a unified structure.
+    \end{itemize}
+    \item Simplification of Relationships:
+    \begin{itemize}
+        \item Unified guild affiliation information to avoid redundancy.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Resulting Conceptual Schema}
+
+\begin{longtable}{|>{\raggedright}m{0.3\textwidth}|>{\raggedright\arraybackslash}m{0.6\textwidth}|}
+\hline
+\textbf{Entity} & \textbf{Description} \\
+\hline
+\endfirsthead
+\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\textbf{Entity} & \textbf{Description} \\
+\hline
+\endhead
+\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline
+\endfoot
+\hline
+\endlastfoot
+Player & Represents players in the game. \\
+\hline
+NPC & Represents non-player characters. \\
+\hline
+Guild & Represents guilds. \\
+\hline
+Quest & Represents quests. \\
+\hline
+Achievement & Represents achievements. \\
+\hline
+Dimension & Represents dimensions. \\
+\hline
+Item & Represents items. \\
+\hline
+Player\_Item & Represents items owned by players. \\
+\hline
+\end{longtable}
+
+\section{Logical schema}
+
+\subsection{Entities and Attributes}
+
+\begin{longtable}{|>{\raggedright}m{0.3\textwidth}|>{\raggedright\arraybackslash}m{0.6\textwidth}|}
+\hline
+\textbf{Entity} & \textbf{Attributes} \\
+\hline
+\endfirsthead
+\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\textbf{Entity} & \textbf{Attributes} \\
+\hline
+\endhead
+\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline
+\endfoot
+\hline
+\endlastfoot
+Player & player\_id (INT, PK), player\_name (VARCHAR), guild\_id (INT, FK) \\
+\hline
+NPC & npc\_id (INT, PK), npc\_name (VARCHAR), guild\_id (INT, FK) \\
+\hline
+Guild & guild\_id (INT, PK), guild\_name (VARCHAR) \\
+\hline
+Quest & quest\_id (INT, PK), quest\_name (VARCHAR), state (BOOLEAN) \\
+\hline
+Achievement & achievement\_id (INT, PK), achievement\_name (VARCHAR) \\
+\hline
+Dimension & dimension\_id (INT, PK), dimension\_name (VARCHAR) \\
+\hline
+Item & item\_id (INT, PK), item\_name (VARCHAR) \\
+\hline
+Player\_Item & player\_item\_id (INT, PK), player\_id (INT, FK), item\_id (INT, FK), state (BOOLEAN) \\
+\hline
+\end{longtable}
+
+\subsection{Relationships}
+
+\begin{longtable}{|>{\raggedright}m{0.3\textwidth}|>{\raggedright\arraybackslash}m{0.7\textwidth}|}
+\hline
+\textbf{Relationship} & \textbf{Attributes} \\
+\hline
+\endfirsthead
+\multicolumn{2}{c}{{\bfseries \tablename\ \thetable{} -- continued from previous page}} \\
+\hline
+\textbf{Relationship} & \textbf{Attributes} \\
+\hline
+\endhead
+\hline \multicolumn{2}{|r|}{{Continued on next page}} \\ \hline
+\endfoot
+\hline
+\endlastfoot
+Complete & player\_id (INT, FK), quest\_id (INT, FK) \\
+\hline
+Talks & player\_id (INT, FK), npc\_id (INT, FK) \\
+\hline
+Belong & player\_id (INT, FK), guild\_id (INT, FK) \\
+\hline
+Own & player\_id (INT, FK), player\_item\_id (INT, FK) \\
+\hline
+Travel & player\_id (INT, FK), dimension\_id (INT, FK) \\
+\hline
+Affiliated & guild\_id (INT, FK), npc\_id (INT, FK), affiliation (VARCHAR) \\
+\hline
+Initiate & npc\_id (INT, FK), quest\_id (INT, FK) \\
+\hline
+Check\_Achievement & quest\_id (INT, FK), achievement\_id (INT, FK), requires\_all\_player\_items (BOOLEAN) \\
+\hline
+Check\_Player\_Item & quest\_id (INT, FK), player\_item\_id (INT, FK) \\
+\hline
+Refers & player\_item\_id (INT, FK), item\_id (INT, FK) \\
+\hline
+Unlock & achievement\_id (INT, FK), dimension\_id (INT, FK) \\
+\hline
+\end{longtable}
+
+\section{Normalization of logical schema}
+
+\subsection{First Normal Form (1NF)}
+
+\begin{itemize}
+    \item Player: Each player has a unique player\_id, player\_name, and guild\_id.
+    \item NPC: Each NPC has a unique npc\_id, npc\_name, and guild\_id.
+    \item Guild: Each guild has a unique guild\_id and guild\_name.
+    \item Quest: Each quest has a unique quest\_id, quest\_name, and state.
+    \item Achievement: Each achievement has a unique achievement\_id and achievement\_name.
+    \item Dimension: Each dimension has a unique dimension\_id and dimension\_name.
+    \item Item: Each item has a unique item\_id and item\_name.
+    \item Player\_Item: Each player item has a unique player\_item\_id, player\_id, item\_id, and state.
+\end{itemize}
+
+\subsection{Second Normal Form (2NF)}
+
+\begin{itemize}
+    \item Player: player\_name and guild\_id are fully dependent on player\_id.
+    \item NPC: npc\_name and guild\_id are fully dependent on npc\_id.
+    \item Guild: guild\_name is fully dependent on guild\_id.
+    \item Quest: quest\_name and state are fully dependent on quest\_id.
+    \item Achievement: achievement\_name is fully dependent on achievement\_id.
+    \item Dimension: dimension\_name is fully dependent on dimension\_id.
+    \item Item: item\_name is fully dependent on item\_id.
+    \item Player\_Item: player\_id, item\_id, and state are fully dependent on player\_item\_id.
+\end{itemize}
+
+\subsection{Third Normal Form (3NF)}
+
+\begin{itemize}
+    \item Player: No transitive dependencies exist.
+    \item NPC: No transitive dependencies exist.
+    \item Guild: No transitive dependencies exist.
+    \item Quest: No transitive dependencies exist.
+    \item Achievement: No transitive dependencies exist.
+    \item Dimension: No transitive dependencies exist.
+    \item Item: No transitive dependencies exist.
+    \item Player\_Item: No transitive dependencies exist.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,368 @@
+---
+title: "Homework 2"
+author: "Mutua Fadhla Mohamed"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Quantitativo
+
+# Impostazioni progetto
+
+```{r, warning = F}
+library(ggplot2)
+
+plot_theme = theme_minimal() + 
+    theme(
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.line = element_line(color = "darkgrey", size = 0.4),
+        axis.ticks = element_line(color = "black"))
+theme_set(plot_theme)
+```
+
+# Lettura dati
+
+```{r, warning = F}
+credit_card = read.csv2("./credit_card.csv", sep = ",", stringsAsFactors=T, row.names=1)
+```
+
+
+# Trasformazione in numerica
+
+```{r, warning = F}
+str(credit_card)
+```
+
+Come si vede, alcuni dei variabili quantitativi sono fattori
+
+```{r, warning = F}
+is_numeric_factor <- function(factor_column) {
+  all(!is.na(suppressWarnings(as.numeric(as.character(factor_column)))))
+}
+
+# Fuzione che converte fact a num
+convert_factors_to_numeric <- function(data) {
+  for (col in names(data)) {
+    if (is.factor(data[[col]])) {
+      if (is_numeric_factor(data[[col]])) {
+        data[[col]] = as.numeric(as.character(data[[col]]))
+      }
+    }
+  }
+  return(data)
+}
+
+credit_w_numeric = convert_factors_to_numeric(credit_card)
+str(credit_w_numeric)
+attach(credit_w_numeric)
+```
+
+Adesso tutti i variabili quantitaivi sono numerici
+
+# Scelta di colonne
+
+```{r, warning = F}
+credit_card_numeric_bool = sapply(credit_w_numeric,is.numeric)
+credit_card_numeric_names = names(credit_card[credit_card_numeric_bool])
+# Rimozione dell'ultimo e penultimo in quanto usato per machine learning
+# e del primo in quanto ID delle persone
+credit_card_numeric_names = credit_card_numeric_names[c(-15,-16)]
+print("Colonne scelte: ")
+print(credit_card_numeric_names)
+```
+
+# Analisi Primaria
+
+```{r, warning = F}
+Analisi_Primaria <- function(data){
+  print(paste("Numeri di osservazione: ",nrow(data)))
+  print(paste("Numeri di variabili: ",ncol(data)))
+}
+Analisi_Primaria(credit_w_numeric[,credit_card_numeric_names])
+str(credit_w_numeric[,credit_card_numeric_names])
+```
+
+# Analisi Univariata
+
+```{r, warning = F}
+univariate_analysis <- function(data, colname) {
+  result = list()
+  
+  result[[colname]] = list(
+    # Summary statistics including min, 1st and 3rd quartile, mean, median, max
+    Summary = summary(data),
+    # Variance
+    Variance = round(var(data), 2),
+    # Standard Deviation
+    Standard_Deviation = round(sd(data), 2),
+    # Mode calculation
+    Moda = Mode(data)
+  )
+  return(result)
+}
+
+Mode <- function(data) {
+  # I valori unique
+  uniq_vals = unique(data)
+  # Conto qunti sono
+  tab = tabulate(match(data, uniq_vals))
+  # Trovo il piu grande
+  modes = uniq_vals[tab == max(tab)]
+  # Ritorno come lista
+  list(Mode = modes, Frequency = max(tab))
+}
+
+sum_info_c = lapply(credit_card_numeric_names, function(ele) {
+  colummn = na.omit(credit_w_numeric[, ele])
+  univariate_analysis(colummn, ele)
+})
+```
+
+# Funzione di Visualizazione continuo
+
+```{r, warning = F}
+visualization_continuos <- function(data,sumary,colname){
+  # Metto in modo da vedere 4 grafici
+  par(mfrow = c(2,2))
+  print(sumary)
+  boxplot(data, horizontal = T, main = paste("Boxplot of ", colname))
+  hist(data, probability = T, col = 2, main = paste("Hist of ", colname))
+  #Metto in comparazione la sua distribuzione
+  curve(dnorm(x, mean = mean(data), sd = sd(data)),
+        add=T, col = 4)
+  print(density(data))
+  plot(density(data), main = paste("Desnity Distribution of ", colname))
+  
+  # Confronto qq-norm della distribuzione con la retta qq-norm della norma
+  # per vedere se la distribuzione si avvicina alla norma e per quali intervalli
+  qqnorm(data, col = 3, main = paste("QQnorm of ", colname))
+  qqline(data, col = 5, pch = 10)
+}
+```
+
+# Funzione di Visualizazione discreta
+
+```{r, warning = F}
+visualization_discrete <- function(data,sumary,colname){
+  par(mfrow = c(1,1))
+  print(sumary)
+  # Quante volte occore per ogni unique
+  print("freq: ")
+  cat("\n")
+  print(table(data))
+  cat("\n")
+  print("percintile: ")
+  # E il suo percentile
+  cat("\n")
+  print(prop.table(table(data))*100)
+  cat("\n")
+  barplot(table(data), col = 2, main = paste("Barplot of ", colname))
+}
+```
+
+# Rimozione 0
+
+```{r, warning = F}
+# funzione per rimuovere lo 0 in quanto tanti dei variabili contengono lo 0
+# che domina il resto dei dati
+rm_0 <- function(data){
+  imp_data = data
+  imp_data[imp_data == 0] = NA
+  imp_data = na.omit(imp_data)
+  return(imp_data)
+}
+```
+
+# Rimozione degli outlier attraverso intervallo di confidenza
+
+```{r, warning = F}
+# funzione per rimuove le outlier per mostrare piu meglio l'andamento della
+# distribuzione
+rm_oultiers <- function(data, CI){
+  mean_data = mean(data)
+  sd_data = sd(data)
+  confidence_level = CI
+  z_score = qnorm((1 + confidence_level) / 2)
+  
+  lower_bound = mean_data - z_score * sd_data
+  upper_bound = mean_data + z_score * sd_data
+  
+  data_in_ci = data[data >= lower_bound & data <= upper_bound]
+  return(data_in_ci)
+}
+```
+
+# 1: Visualizazione Customer_Age
+```{r, warning = F}
+visualization_continuos(na.omit(credit_w_numeric[,"Customer_Age"]), sum_info_c[1],"Customer_Age")
+```
+
+Possiamo dedurre che la distribuzione è per lo più una gaussiana
+e che la maggior parte delle persone compreso tra 41.00 e 52.00 anni, 
+essendo rispettivamente il 1° e il 3° quantile e con maggior densita 
+alineati alla retta qq della norma
+La piu grande occoranze è 500 a 44 anni 
+alineati alla retta qq della norma.
+Gli outlier invece si trovano ad eta di 73 e 70
+
+# 2: Visualizazione Dependent_count
+```{r, warning = F}
+visualization_discrete(na.omit(credit_w_numeric[,"Dependent_count"]), sum_info_c[2],"Dependent_count")
+```
+
+si osservare che la maggior parte delle persone hanno
+tra 1 e 3 dipendenti coprendo il ~=71.35%, 
+con la mggior parte avendo 3 dipendenti a 2732 occoranze (~=26.98%)
+
+# 3: Visualizazione Months_on_book
+```{r, warning = F}
+visualization_continuos(na.omit(credit_w_numeric[,"Months_on_book"]), sum_info_c[3],"Months_on_book")
+```
+
+Possiamo dedurre che la distribuzione è per lo più una gaussiana
+e che la maggior parte delle persone sono registrati con la banca fra 31.00 e 40.00 mesi,
+La piu grande occoranze è 2463 a 36 mesi
+
+# 4: Visualizazione Total_Relationship_Count
+```{r, warning = F}
+visualization_discrete(na.omit(
+  credit_w_numeric[,"Total_Relationship_Count"]), sum_info_c[4],"Total_Relationship_Count")
+```
+
+si osservare che la maggior parte delle persone hanno
+tra 3 e 5 prodotti coprendo il ~=60.31%, 
+con la mggior parte avendo 3 prodotti a 2305 occoranze (~=22.76%)
+Si osserva che la differenza tra 4,5,6 prodotti è <1% e quindi
+si puo considerare di uguale possesso
+
+# 5: Visualizazione Months_Inactive_12_mon
+```{r, warning = F}
+visualization_discrete(na.omit(
+  credit_w_numeric[,"Months_Inactive_12_mon",]), sum_info_c[5],"Months_Inactive_12_mon")
+```
+
+Possiamo osservare che la maggior parte delle persone rimangono innativi
+tra 1 e 3 mesi, con la maggior parte stando per 3 mesi con 3846 occoranze
+Si osserva che la maggior parte non vanno piu di 3 mesi prima di riattivare
+ma quasi sicuramente 1 mese e piu in quanto <1% rimangono attivi costantemente
+(0 mesi di innativita)
+
+# 6: Visualizazione Contacts_Count_12_mon
+```{r, warning = F}
+visualization_discrete(na.omit(
+  credit_w_numeric[,"Contacts_Count_12_mon"]), sum_info_c[6],"Contacts_Count_12_mon")
+```
+
+Possiamo osservare che la maggior parte delle persone hanno
+tra 2 e 3 contanti/12mesi, con la maggior parte avendo 3 contanti con 3380 occoranze
+
+# 7: Visualizazione Credit_Limit
+```{r, warning = F}
+visualization_continuos(na.omit(credit_w_numeric[,"Credit_Limit"]), sum_info_c[7],"Credit_Limit")
+```
+
+Possiamo osservare che la maggior parte delle persone hanno un limite di credito
+tra 2555 e 11068, ed esiste un anomalia al limite superiore dove non rispetta la descrescita delle occoranze del limite di credito con 34516 avendo 508 occoranze ed essendo il max pur non facendo parte del IQR
+
+# 8: Visualizazione Total_Revolving_Bal
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Total_Revolving_Bal"]), sum_info_c[8],"Total_Revolving_Bal")
+```
+
+Possiamo notare che la maggior parte delle persone hanno Prestito a saldo rotativo compresa tra 359 e 1784, essendo rispettivamente il 1° e il 3° quantile
+e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle persone hanno un Prestito a saldo rotativo
+a 0, 2470 in totale
+Per analizare quelli che hanno serve ignorare quelli senza
+
+## Rimozione dello 0
+```{r, warning = F}
+rm_0_data = rm_0(na.omit(
+  credit_w_numeric[,"Total_Revolving_Bal"]))
+visualization_continuos(rm_0_data, univariate_analysis(rm_0_data,"Total_Revolving_Bal"),"Total_Revolving_Bal")
+```
+  
+Possiamo notare che la maggior parte delle persone hanno Prestito a saldo rotativo compresa tra 1132 e 1935, essendo rispettivamente il 1° e il 3° quantile
+e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle persone hanno un Prestito a saldo rotativo
+a 2517 per un totale di 508 persone esendo fuori dal IQR
+
+# 9: Visualizazione Avg_Open_To_Buy
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Avg_Open_To_Buy"]), sum_info_c[9],"Avg_Open_To_Buy")
+```
+
+Possiamo notare che la maggior parte delle persone disponibili per acquistare una linea di credito sono compresa tra 1324 e 9859, essendo rispettivamente il 1° e il 3° quantile
+e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle persone hanno un Prestito a saldo rotativo
+a 2517 per un totale di 508 persone esendo fuori dal IQR
+
+# 10: Visualizazione Total_Amt_Chng_Q4_Q1
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Total_Amt_Chng_Q4_Q1"]), sum_info_c[10],"Total_Amt_Chng_Q4_Q1")
+```
+
+Possiamo notare che la maggior parte delle Variazione dell'importo della transazione (Q4 rispetto a Q1) è compresa tra 0.6310 e 0.8590, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione dell'importo della transazione (Q4 rispetto a Q1) sono a 0.791 con 36 Variazione
+
+## rimozione di outlier per Total_Amt_Chng_Q4_Q1
+```{r, warning = F}
+rm_outlier_data = rm_oultiers(na.omit(credit_w_numeric[,"Total_Amt_Chng_Q4_Q1"]),.98)
+visualization_continuos(rm_outlier_data, univariate_analysis(rm_outlier_data,"Total_Amt_Chng_Q4_Q1"),"Total_Amt_Chng_Q4_Q1")
+```
+
+Possiamo dedurre che la distribuzione è semi-normato e che la maggior parte delle Variazione dell'importo della transazione (Q4 rispetto a Q1) sono compresa tra 0.6290 e 0.8480, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione delle Variazione dell'importo della transazione (Q4 rispetto a Q1) sono a 0.791 con 36 Variazione
+
+# 11: Visualizazione Total_Trans_Amt
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Total_Trans_Amt"]), sum_info_c[11],"Total_Trans_Amt")
+```
+
+Possiamo notare che la maggior parte delle Importe totali delle transazioni sono compresa tra 2156 e 4741, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Importe totali delle transazioni sono a 4253 e 4509 con 11 transazioni
+
+# 12: Visualizazione Total_Trans_Ct
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Total_Trans_Ct"]), sum_info_c[12],"Total_Trans_Ct")
+```
+
+Possiamo dedurre che la distribuzione è semi-normato positivamente assimetrica e che la maggior parte delle Conteggio totale delle transazioni sono compresa tra 45.00 e 81.00, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione delle Conteggio totale delle transazioni sono a 81 con 208 occoranze
+
+# 13: Visualizazione Total_Ct_Chng_Q4_Q1
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Total_Ct_Chng_Q4_Q1"]), sum_info_c[13],"Total_Ct_Chng_Q4_Q1")
+```
+
+Possiamo notare che la maggior parte delle Variazione delle Variazione nel conteggio delle transazioni (Q4 rispetto a Q1) è compresa tra 0.5820 e 0.8180, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione dell'importo della transazione (Q4 rispetto a Q1) sono a 0.667 con 171 Variazione
+
+```{r, warning = F}
+rm_outlier_data = rm_oultiers(na.omit(credit_w_numeric[,"Total_Ct_Chng_Q4_Q1"]),.98)
+visualization_continuos(rm_outlier_data, univariate_analysis(rm_outlier_data,"Total_Ct_Chng_Q4_Q1"),"Total_Ct_Chng_Q4_Q1")
+```
+
+Possiamo dedurre che la distribuzione è semi-normato e che la maggior parte delle Variazione delle Variazione nel conteggio delle transazioni (Q4 rispetto a Q1) è compresa tra 0.5810 e 0.8100, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione elle Variazione delle Variazione nel conteggio delle transazioni (Q4 rispetto a Q1) sono a 0.667 con 171 Variazione
+
+# 14: Visualizazione Avg_Utilization_Ratio
+```{r, warning = F}
+visualization_continuos(na.omit(
+  credit_w_numeric[,"Avg_Utilization_Ratio"]), sum_info_c[14],"Avg_Utilization_Ratio")
+```
+
+Possiamo dedurre che la distribuzione è semi-normato e che la maggior parte delle Rapporto medio di utilizzo della carta è compresa tra 0.0230 e 0.5030, essendo rispettivamente il 1° e il 3° quantile e con maggior densita alineati alla retta qq della norma.
+Possiamo notare che la maggior parte delle Variazione elle Variazione delle Variazione nel conteggio delle transazioni (Q4 rispetto a Q1) sono a 0 con 2470 Variazione
+
+```{r, warning = F}
+detach(credit_w_numeric)
+```

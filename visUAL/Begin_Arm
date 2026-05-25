@@ -1,0 +1,22 @@
+		mov		R0,#5
+		mov		R1,R0
+		mov		R2,R0
+		add		R1,R1,#1
+		mov		R3,#0
+		mov		R4,#0
+loop_sum
+		cmp		R3,R2
+		beq		end_sum
+		add		R4,R4,R1
+		add		R3,R3,#1
+		b		loop_sum
+end_sum
+		mov		R1,R4
+		mov		R3,#0
+loop_div
+		cmp		R1,#0
+		ble		end_div
+		sub		R1,R1,#2
+		add		R3,R3,#1
+		b		loop_div
+end_div

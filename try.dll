@@ -1,0 +1,210 @@
+create table achievement
+(
+    achievement_id int auto_increment
+        primary key,
+    name           varchar(255)         not null,
+    state          tinyint(1) default 0 null
+);
+
+create table dimension
+(
+    dimension_id   int auto_increment
+        primary key,
+    achievement_id int          null,
+    name           varchar(255) not null,
+    constraint dimension_ibfk_1
+        foreign key (achievement_id) references achievement (achievement_id)
+);
+
+create index achievement_id
+    on dimension (achievement_id);
+
+create table guild
+(
+    guild_id  int auto_increment
+        primary key,
+    name      varchar(255) not null,
+    alignment varchar(255) not null
+);
+
+create table npc
+(
+    npc_id   int auto_increment
+        primary key,
+    guild_id int          null,
+    name     varchar(255) not null,
+    constraint npc_ibfk_1
+        foreign key (guild_id) references guild (guild_id)
+);
+
+create index guild_id
+    on npc (guild_id);
+
+create table quest
+(
+    quest_id int auto_increment
+        primary key,
+    name     varchar(255)         not null,
+    state    tinyint(1) default 0 null
+);
+
+create table player
+(
+    player_id int auto_increment
+        primary key,
+    name      varchar(255) not null,
+    guild_id  int          null,
+    quest_id  int          null,
+    email     varchar(255) null,
+    constraint player_ibfk_1
+        foreign key (guild_id) references guild (guild_id),
+    constraint player_ibfk_2
+        foreign key (quest_id) references quest (quest_id)
+);
+
+create table completion
+(
+    player_id int                  not null,
+    quest_id  int                  not null,
+    state     tinyint(1) default 0 null,
+    primary key (player_id, quest_id),
+    constraint completion_ibfk_1
+        foreign key (player_id) references player (player_id)
+            on update cascade on delete cascade,
+    constraint completion_ibfk_2
+        foreign key (quest_id) references quest (quest_id)
+            on update cascade on delete cascade
+);
+
+create index quest_id
+    on completion (quest_id);
+
+create table earn
+(
+    player_id      int                  not null,
+    achievement_id int                  not null,
+    state          tinyint(1) default 0 null,
+    primary key (player_id, achievement_id),
+    constraint earn_ibfk_1
+        foreign key (player_id) references player (player_id)
+            on update cascade on delete cascade,
+    constraint earn_ibfk_2
+        foreign key (achievement_id) references achievement (achievement_id)
+            on update cascade on delete cascade
+);
+
+create index achievement_id
+    on earn (achievement_id);
+
+create index idx_guild_id
+    on player (guild_id);
+
+create index idx_quest_id
+    on player (quest_id);
+
+create definer = root@localhost trigger after_player_insert
+    after insert
+    on player
+    for each row
+BEGIN
+    INSERT INTO Completion (player_id, quest_id, state) VALUES (NEW.player_id, NEW.quest_id, FALSE);
+END;
+
+create table player_item
+(
+    player_item_id int auto_increment
+        primary key,
+    player_id      int                  null,
+    item_id        int                  null,
+    legality       tinyint(1) default 1 null,
+    constraint player_item_ibfk_1
+        foreign key (player_id) references player (player_id)
+);
+
+create index player_id
+    on player_item (player_id);
+
+create table travel
+(
+    travel_id    int auto_increment
+        primary key,
+    player_id    int                  null,
+    dimension_id int                  null,
+    permit       tinyint(1) default 0 null,
+    constraint travel_ibfk_1
+        foreign key (player_id) references player (player_id)
+            on update cascade on delete cascade,
+    constraint travel_ibfk_2
+        foreign key (dimension_id) references dimension (dimension_id)
+            on update cascade on delete cascade
+);
+
+create index dimension_id
+    on travel (dimension_id);
+
+create index player_id
+    on travel (player_id);
+
+create definer = root@localhost view guildplayercount as
+select `g`.`name` AS `guild_name`, count(`p`.`player_id`) AS `player_count`
+from (`dimensional_transfer`.`guild` `g` left join `dimensional_transfer`.`player` `p`
+      on ((`g`.`guild_id` = `p`.`guild_id`)))
+group by `g`.`guild_id`;
+
+create definer = root@localhost view playerquestinfo as
+select `p`.`name` AS `player_name`, `q`.`name` AS `quest_name`, `q`.`state` AS `quest_state`
+from (`dimensional_transfer`.`player` `p` join `dimensional_transfer`.`quest` `q`
+      on ((`p`.`quest_id` = `q`.`quest_id`)));
+
+create
+    definer = root@localhost procedure AddNewPlayer(IN p_name varchar(255), IN p_guild_id int, IN p_quest_id int)
+BEGIN
+    INSERT INTO Player (name, guild_id, quest_id) VALUES (p_name, p_guild_id, p_quest_id);
+END;
+
+create
+    definer = root@localhost procedure AddPlayer(IN p_name varchar(255), IN p_guild_id int, IN p_quest_id int)
+BEGIN
+    INSERT INTO Player (name, guild_id, quest_id) VALUES (p_name, p_guild_id, p_quest_id);
+END;
+
+create
+    definer = root@localhost function GetGuildName(guild_id int) returns varchar(255) deterministic
+BEGIN
+    DECLARE guild_name VARCHAR(255);
+    SELECT name INTO guild_name FROM Guild WHERE guild_id = guild_id;
+    RETURN guild_name;
+END;
+
+create
+    definer = root@localhost function GetPlayerQuestName(player_id int) returns varchar(255) deterministic
+BEGIN
+    DECLARE quest_name VARCHAR(255);
+    SELECT q.name INTO quest_name
+    FROM Player p
+    JOIN Quest q ON p.quest_id = q.quest_id
+    WHERE p.player_id = player_id;
+    RETURN quest_name;
+END;
+
+create
+    definer = root@localhost procedure ListPlayers()
+BEGIN
+    DECLARE done INT DEFAULT 0;
+    DECLARE p_name VARCHAR(255);
+    DECLARE cur CURSOR FOR SELECT name FROM Player;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+    OPEN cur;
+
+    read_loop: LOOP
+        FETCH cur INTO p_name;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        SELECT p_name;
+    END LOOP;
+
+    CLOSE cur;
+END;
+
