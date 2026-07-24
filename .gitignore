@@ -36,6 +36,7 @@ dist/
 *.7z
 *.bz2
 *.npy
+*.pdf
 
 # Logs
 *.txt
