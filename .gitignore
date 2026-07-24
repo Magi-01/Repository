@@ -16,6 +16,8 @@ Artifical_Intelligence/
 Artificial_Intelligence/
 Personal/
 WSL/
+Machine_Learning/Learn\Machine\_Learning
+Machine_Learning/Challenge_3/data/KMNIST
 
 
 # Document files
@@ -25,6 +27,8 @@ WSL/
 *.aux
 *.out
 *.gz
+*.rar
+*.html
 
 # Data and Module Types
 *.vrp
