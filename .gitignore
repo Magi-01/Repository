@@ -3,6 +3,7 @@ myapp/
 venv/
 .env/
 
+
 # Python Cache and build files
 __pycache__/
 *.pyc
@@ -11,6 +12,11 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+Artifical_Intelligence/
+Artificial_Intelligence/
+Personal/
+WSL/
+
 
 # Document files
 *.yaml
