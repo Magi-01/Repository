@@ -52,8 +52,7 @@ class Utility():
 
         if largest != i:
             array[i], array[largest] = array[largest], array[i]
-
-        self.heapify(array, len(array), largest)
+            self.heapify(array, len(array), largest)
         return array
 
     def max_heap(self, array: list) -> list:
