@@ -1,0 +1,883 @@
+---
+title: "GroupH_HM2"
+author: "Mutua, Papa, Lopes El Zein"
+date: "2026-10-31"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+  html_document:
+    toc: true
+    toc_depth: '3'
+    df_print: paged
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE, echo=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise 4.4 - Exponential distribution
+
+For the Students data file (Exercise 1.2 in Chapter 1) and corresponding population, find the ML estimate of the population proportion believing in life after death. Construct a Wald 95% confidence interval, using its formula (4.8). Interpret.
+
+## (a) MLE of population proportion believing in life after death
+
+Of the population, one can either believe or not believe as such we have a bernoulli with PMF
+$$
+P(X_i=x_i) = p^{x_i}(1-p)^{1-x_i}
+$$
+The likelihood is
+
+$$
+\mathcal{L}(p) = \prod_{i=1}^n{p^{x_i}(1-p)^{1-x_i}}
+$$
+The log-likelihood is
+
+$$
+\ell(p) = (\sum_{i=1}^n{x_i})\ln (p)+ (n-\sum_{i=1}^n{x_i})\ln(1-p)
+$$
+Differentiating and setting equal to 0
+
+$$
+\frac{d \ell(p)}{dp} = \frac{\sum_{i=1}^n{x_i}}{ln (p)}+ \frac {n-\sum_{i=1}^n{x_i}}{\ln(1-p)}
+$$
+Thus 
+
+$$
+\hat p = \frac{\sum_{i=1}^n{x_i}}{n}
+$$
+
+```{r ex444-data, echo=TRUE}
+students <- read.table(
+  "http://stat4ds.rwth-aachen.de/data/Students.dat",
+  header = TRUE
+)
+
+n = sum(!is.na(students$life))
+x = sum(students$life == 1, na.rm = TRUE)
+p_hat = x/n
+
+alpha = 0.05
+z = qnorm(1-alpha/2)
+SE = sqrt(p_hat*(1-p_hat)/n)
+
+# the wald CI is
+CI = p_hat * c(-1,1) + z*SE
+c("p_hat"=p_hat, "CI"=CI)
+```
+
+We are 95% confident that the true proportion of the population who believe in life after death is between 39.02% and 64.32%
+
+# Exercise 4.39 - Exponential distribution 
+
+For independent observations $y_1,...,y_n$ from the exponential pdf
+$f(y; \lambda) = \lambda e^{-\lambda y}$ for $y \ge 0$, for which $\mu = \sigma = 1/\lambda$:
+
+(a) Find the log-likelihood function $\mathcal{L}(\lambda)$.
+(b) Find the ML estimator $\hat\lambda$ of $\lambda$.
+(c) Suppose $\bar y = 10$. Plot $\mathcal{L}(\lambda)$ - $\mathcal{L}(\hat\lambda)$ between $\lambda = 0.01$ and $\lambda = 4.00$ if n = (i) 1, (ii) 5, (iii) 10. How does the shape of $\mathcal{L}(\lambda)$ change as n increases? What are the implications of the narrowing log-likelihood? (Also, when the log-likelihood is closer to parabolic, the distribution of the ML estimator is closer to normality.)
+(d) Find the information $I(\lambda)$ using equation (4.3) and using equation (4.4). Specify the asymptotic distribution of $\lambda$
+
+Let \(Y_1,\ldots,Y_n\) be independent observations from
+
+\[
+f(y;\lambda)=\lambda e^{-\lambda y},\qquad y\geq 0,\quad \lambda>0.
+\]
+
+For this parameterisation, both the mean and standard deviation are \(1/\lambda\).
+
+## (a) Log-likelihood
+
+By independence, the likelihood is
+
+\[
+\begin{aligned}
+\mathcal L(\lambda;\mathbf y)
+&=\prod_{i=1}^n \lambda e^{-\lambda y_i}\\
+&=\lambda^n\exp\left(-\lambda\sum_{i=1}^n y_i\right).
+\end{aligned}
+\]
+
+Taking logarithms gives
+
+\[
+\boxed{\ell(\lambda)
+=n\log(\lambda)-\lambda\sum_{i=1}^n y_i.}
+\]
+
+## (b) Maximum likelihood estimator
+
+Differentiate the log-likelihood:
+
+\[
+\frac{\partial\ell}{\partial\lambda}
+=\frac{n}{\lambda}-\sum_{i=1}^n y_i.
+\]
+
+Setting this equal to zero gives
+
+\[
+\boxed{\widehat\lambda
+=\frac{n}{\sum_{i=1}^n y_i}
+=\frac{1}{\bar y}.}
+\]
+
+The second derivative is
+
+\[
+\frac{\partial^2\ell}{\partial\lambda^2}
+=-\frac{n}{\lambda^2}<0,
+\]
+
+so the stationary point is a maximum.
+
+## (c) Diffrence and Plot
+
+Since \(\widehat\lambda=1/\bar y=0.1\) when \(\bar y=10\), the log-likelihood difference is
+
+\[
+\begin{aligned}
+\ell(\lambda)-\ell(\widehat\lambda)
+&=n\log\left(\frac{\lambda}{\widehat\lambda}\right)
+-(\lambda-\widehat\lambda)\sum_{i=1}^n y_i\\
+&=n\left[
+\log\left(\frac{\lambda}{\widehat\lambda}\right)
+-\left(\frac{\lambda}{\widehat\lambda}-1\right)
+\right].
+\end{aligned}
+\]
+
+The difference is always at most zero and equals zero at the MLE.
+
+```{r echo=TRUE}
+lambda_hat <- 1 / 10
+lambda_grid <- seq(0.01, 4.00, length.out = 400)
+
+log_lik <- function(lambda, n) {
+  n * (log(lambda / lambda_hat) - (lambda / lambda_hat - 1))
+}
+
+plot(lambda_grid, log_lik(lambda_grid, 1),
+     type = "l", lwd = 2, col = "blue",
+     xlab = expression(lambda),
+     ylab = "difference of likelihood",
+     ylim = c(min(log_lik(lambda_grid, 10)), 0))
+lines(lambda_grid, log_lik(lambda_grid, 5),
+      col = "red", lwd = 2)
+lines(lambda_grid, log_lik(lambda_grid, 10),
+      col = "darkgreen", lwd = 2)
+abline(h = 0, lty = 2)
+abline(v = lambda_hat, lty = 3)
+legend("bottomright",
+       legend = c("n = 1", "n = 5", "n = 10"),
+       col = c("blue", "red", "darkgreen"),
+       lwd = 2, bty = "n")
+```
+
+As \(n\) increases, the relative log-likelihood becomes more sharply peaked around \(\widehat\lambda\). This means that different \(\lambda\) from the MLE become less supported by the data and as such the likelihood becomes more centered around the estimate
+
+## (d) Fisher information and asymptotic distribution
+
+The score is
+
+\[
+U(\lambda)=\frac{\partial\ell}{\partial\lambda}
+=\frac{n}{\lambda}-\sum_{i=1}^nY_i.
+\]
+
+**Using the expected negative second derivative:**
+
+\[
+\mathcal I_n(\lambda)
+=-E\left[\frac{\partial^2\ell}{\partial\lambda^2}\right]
+=-E\left[-\frac{n}{\lambda^2}\right]
+=\boxed{\frac{n}{\lambda^2}}.
+\]
+
+**Using the variance of the score:**
+
+Since \(\operatorname{Var}(Y_i)=1/\lambda^2\), independence gives
+
+\[
+\mathcal I_n(\lambda)
+=\operatorname{Var}\{U(\lambda)\}
+=\operatorname{Var}\left(\sum_{i=1}^nY_i\right)
+=\boxed{\frac{n}{\lambda^2}}.
+\]
+
+The two definitions agree. The Cramér–Rao lower bound for an unbiased estimator is
+
+\[
+\operatorname{Var}(\widetilde\lambda)
+\geq \frac{1}{\mathcal I_n(\lambda)}
+=\frac{\lambda^2}{n}.
+\]
+
+The asymptotic distribution of the MLE is
+
+\[
+\boxed{\sqrt n(\widehat\lambda-\lambda)
+\ \xrightarrow{d}\ N(0,\lambda^2),}
+\]
+
+or, equivalently, for large \(n\),
+
+\[
+\widehat\lambda\ \dot\sim\
+N\left(\lambda,\frac{\lambda^2}{n}\right).
+\]
+
+---
+
+# Exercise 4.44 - Normal and log-normal models for house prices  
+
+Refer to the previous two exercises (4.42 and 4.43). Consider the
+selling prices (in thousands of dollars) in the Houses data file
+mentioned in Exercise 4.31.
+
+(a) Fit the normal distribution to the data by finding the ML estimates
+    of $\mu$ and $\sigma$ for that distribution.
+(b) Fit the log-normal distribution to the data by finding the ML
+    estimates of its parameters.
+(c) Find and compare the ML estimates of the mean and standard deviation
+    of selling price for the two distributions.
+(d) Superimpose the fitted normal and log-normal distributions on a
+    histogram of the data. Which distribution seems to be more
+    appropriate for summarizing the selling prices?
+
+The response is the selling price, in thousands of dollars. The code below reads the `Houses` data used in the exercise.
+
+```{r ex444-data, echo=TRUE}
+houses <- read.table(
+  "http://stat4ds.rwth-aachen.de/data/Houses.dat",
+  header = TRUE
+)
+selling <- houses$price
+
+# The log-normal model requires strictly positive observations.
+stopifnot(all(selling > 0))
+summary(selling)
+```
+
+## (a) Fit a normal distribution by maximum likelihood
+
+For a normal model \(Y_i\sim N(\mu,\sigma^2)\), the MLEs are
+
+\[
+\boxed{\widehat\mu=\bar y,\qquad
+\widehat\sigma^2_{\mathrm{MLE}}
+=\frac{1}{n}\sum_{i=1}^n(y_i-\bar y)^2.}
+\]
+
+```{r ex444-normal, echo=TRUE}
+mu_normal <- mean(selling)
+var_normal <- mean((selling - mu_normal)^2)
+sd_normal <- sqrt(var_normal)
+
+c(mu_hat = mu_normal,
+  sigma2_hat = var_normal,
+  sigma_hat = sd_normal)
+
+hist(selling, probability = TRUE, col = "grey85",
+     border = "white", main = "House selling prices: normal fit",
+     xlab = "Selling price (thousands of dollars)")
+curve(dnorm(x, mean = mu_normal, sd = sd_normal),
+      add = TRUE, col = "blue", lwd = 2)
+```
+
+## (b) Fit a log-normal distribution by maximum likelihood
+
+If \(Y\) is log-normal, then \(Z=\log(Y)\) is normal. Estimate the mean and variance on the log scale:
+
+\[
+\boxed{
+\widehat\mu_{\log}
+=\frac{1}{n}\sum_{i=1}^n\log(y_i),\qquad
+\widehat\sigma^2_{\log,\mathrm{MLE}}
+=\frac{1}{n}\sum_{i=1}^n
+\{\log(y_i)-\widehat\mu_{\log}\}^2.
+}
+\]
+
+```{r ex444-lognormal, echo=TRUE}
+log_selling <- log(selling)
+
+mu_log <- mean(log_selling)
+var_log <- mean((log_selling - mu_log)^2)
+sd_log <- sqrt(var_log)
+
+c(mu_log_hat = mu_log,
+  sigma2_log_hat = var_log,
+  sigma_log_hat = sd_log)
+
+hist(log_selling, probability = TRUE, col = "grey85",
+     border = "white", main = "Log selling prices",
+     xlab = "Log selling price")
+curve(dnorm(x, mean = mu_log, sd = sd_log),
+      add = TRUE, col = "blue", lwd = 2)
+```
+
+## (c) Compare the estimated means and standard deviations
+
+Normal Distribution
+Suppose:
+
+$$
+Y_i \sim N(\mu,\sigma^2)
+$$
+
+Probability Density Function
+
+$$
+f(y;\mu,\sigma)=
+\frac{1}{\sqrt{2\pi\sigma^2}}
+e^{-\frac{(y-\mu)^2}{2\sigma^2}}
+$$
+
+Likelihood Function. Assuming independent observations:
+
+$$
+L(\mu,\sigma)=\prod_{i=1}^{n}f(y_i;\mu,\sigma)
+$$
+
+$$
+L(\mu,\sigma)=
+\prod_{i=1}^{n}
+\frac{1}{\sqrt{2\pi\sigma^2}}
+e^{-\frac{(y_i-\mu)^2}{2\sigma^2}}
+$$
+
+Simplifying:
+
+$$
+L(\mu,\sigma)=
+(2\pi\sigma^2)^{-\frac n2}
+e^{-\frac{1}{2\sigma^2}\sum_{i=1}^{n}(y_i-\mu)^2}
+$$
+
+Log-likelihood. Taking the logarithm:
+
+$$
+\ell(\mu,\sigma)=\ln L(\mu,\sigma)
+$$
+
+$$
+\boxed{
+\ell(\mu,\sigma)=
+-\frac n2\ln(2\pi)
+-\frac n2\ln(\sigma^2)
+-\frac{1}{2\sigma^2}\sum_{i=1}^{n}(y_i-\mu)^2
+}
+$$
+
+MLE of $\mu$. Differentiating with respect to $\mu$:
+
+$$
+\frac{\partial\ell}{\partial\mu}
+=
+\frac{1}{\sigma^2}\sum_{i=1}^{n}(y_i-\mu)
+$$
+
+Setting the derivative equal to zero:
+
+$$
+\sum_{i=1}^{n}(y_i-\mu)=0
+$$
+
+$$
+\sum_{i=1}^{n}y_i-n\mu=0
+$$
+
+Therefore:
+
+$$
+\boxed{
+\hat{\mu}_{MLE}=\frac{1}{n}\sum_{i=1}^{n}y_i=\bar y
+}
+$$
+
+MLE of $\sigma$. Differentiating with respect to $\sigma$:
+
+$$
+\frac{\partial\ell}{\partial\sigma}
+=
+-\frac n\sigma+
+\frac{1}{\sigma^3}\sum_{i=1}^{n}(y_i-\mu)^2
+$$
+
+Setting the derivative equal to zero:
+
+$$
+-\frac n\sigma+
+\frac{1}{\sigma^3}\sum_{i=1}^{n}(y_i-\mu)^2=0
+$$
+
+Multiplying by $\sigma^3$:
+
+$$
+-n\sigma^2+\sum_{i=1}^{n}(y_i-\mu)^2=0
+$$
+
+Therefore:
+
+$$
+\boxed{
+\hat{\sigma}_{MLE}^2=
+\frac{1}{n}\sum_{i=1}^{n}(y_i-\bar y)^2
+}
+$$
+
+And:
+
+$$
+\boxed{
+\hat{\sigma}_{MLE}=
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\bar y)^2}
+}
+$$
+
+Log-normal Distribution. Suppose:
+
+$$
+Y_i\sim LogNormal(\mu,\sigma^2)
+$$
+
+This means:
+
+$$
+\ln(Y_i)\sim N(\mu,\sigma^2)
+$$
+
+Probability Density Function
+
+$$
+f(y;\mu,\sigma)=
+\frac{1}{y\sigma\sqrt{2\pi}}
+e^{-\frac{(\ln y-\mu)^2}{2\sigma^2}},
+\quad y>0
+$$
+
+Likelihood Function
+
+$$
+L(\mu,\sigma)=
+\prod_{i=1}^{n}
+\frac{1}{y_i\sigma\sqrt{2\pi}}
+e^{-\frac{(\ln y_i-\mu)^2}{2\sigma^2}}
+$$
+
+Simplifying:
+
+$$
+L(\mu,\sigma)=
+\frac{1}{(2\pi)^{n/2}\sigma^n\prod_{i=1}^{n}y_i}
+e^{-\frac{1}{2\sigma^2}
+\sum_{i=1}^{n}(\ln y_i-\mu)^2}
+$$
+
+Log-likelihood. Taking logarithms:
+
+$$
+\boxed{
+\begin{aligned}
+\ell(\mu,\sigma)=&
+-\frac n2\ln(2\pi)
+-n\ln(\sigma)\\
+&-\sum_{i=1}^{n}\ln(y_i)
+-\frac{1}{2\sigma^2}
+\sum_{i=1}^{n}(\ln y_i-\mu)^2
+\end{aligned}
+}
+$$
+
+MLE of $\mu$. Differentiating with respect to $\mu$:
+
+$$
+\frac{\partial\ell}{\partial\mu}
+=
+\frac{1}{\sigma^2}
+\sum_{i=1}^{n}(\ln y_i-\mu)
+$$
+
+Setting the derivative equal to zero:
+
+$$
+\sum_{i=1}^{n}\ln(y_i)-n\mu=0
+$$
+
+Therefore:
+
+$$
+\boxed{
+\hat{\mu}_{MLE}=
+\frac{1}{n}\sum_{i=1}^{n}\ln(y_i)
+}
+$$
+
+MLE of $\sigma$. Differentiating with respect to $\sigma$:
+
+$$
+\frac{\partial\ell}{\partial\sigma}
+=
+-\frac n\sigma+
+\frac{1}{\sigma^3}
+\sum_{i=1}^{n}(\ln y_i-\mu)^2
+$$
+
+Setting the derivative equal to zero:
+
+$$
+-\frac n\sigma+
+\frac{1}{\sigma^3}
+\sum_{i=1}^{n}(\ln y_i-\mu)^2=0
+$$
+
+Therefore:
+
+$$
+\boxed{
+\hat{\sigma}_{MLE}^2=
+\frac{1}{n}\sum_{i=1}^{n}
+(\ln y_i-\overline{\ln(y)})^2
+}
+$$
+
+And:
+
+$$
+\boxed{
+\hat{\sigma}_{MLE}=
+\sqrt{
+\frac{1}{n}\sum_{i=1}^{n}
+(\ln y_i-\overline{\ln(y)})^2
+}}
+$$
+
+The normal distribution is symmetric around its mean. It can take both positive and negative values, and its mean and variance describe the centre and spread of the data. The maximum likelihood estimator (MLE) of the mean is the sample arithmetic mean, while the MLE of the variance is the average squared deviation from the sample mean. The log-normal distribution, on the other hand, only takes positive values. A random variable follows a log-normal distribution if its natural logarithm follows a normal distribution. Therefore, parameter estimation is performed by taking the logarithm of the observations and applying the same estimation procedure used for the normal distribution. The MLE of the mean is the arithmetic mean of the log-transformed observations, and the MLE of the variance is their average squared deviation from that mean.
+
+
+For the log-normal model, the mean and variance of \(Y\), rather than of \(\log(Y)\), are
+
+\[
+E(Y)=\exp\left(\mu_{\log}+\frac{\sigma_{\log}^2}{2}\right),
+\]
+
+\[
+\operatorname{Var}(Y)
+=\left[\exp(\sigma_{\log}^2)-1\right]
+ \exp\left(2\mu_{\log}+\sigma_{\log}^2\right).
+\]
+
+Substitute the log-normal MLEs to obtain the fitted mean and standard deviation on the selling-price scale.
+
+```{r ex444-comparison,echo=TRUE}
+mean_lognormal <- exp(mu_log + var_log / 2)
+var_lognormal <- (exp(var_log) - 1) *
+  exp(2 * mu_log + var_log)
+sd_lognormal <- sqrt(var_lognormal)
+
+comparison <- data.frame(
+  Model = c("Normal", "Log-normal"),
+  Estimated_mean = c(mu_normal, mean_lognormal),
+  Estimated_SD = c(sd_normal, sd_lognormal)
+)
+```
+
+```{r echo=TRUE}
+knitr::kable(comparison, digits = 3)
+```
+
+## (d) Overlay the fitted distributions and compare
+
+```{r ex444-overlay, echo=TRUE}
+hist(selling, probability = TRUE, col = "grey85",
+     border = "white", main = "Selling prices: normal vs log-normal",
+     xlab = "Selling price (thousands of dollars)")
+
+curve(dnorm(x, mean = mu_normal, sd = sd_normal),
+      add = TRUE, col = "blue", lwd = 2)
+curve(dlnorm(x, meanlog = mu_log, sdlog = sd_log),
+      add = TRUE, col = "red", lwd = 2, lty = 2)
+
+legend("topright",
+       legend = c("Normal", "Log-normal"),
+       col = c("blue", "red"), lwd = 2,
+       lty = c(1, 2), bty = "n")
+```
+
+The log-normal distribution is right-skewed more in line with the house prices data. The normal distribution is symmetric and assigns some probability to negative prices. Thus the more likely distribution would be the log-normal
+
+---
+
+# Exercise 6.11 - Tests in the college GPA regression  
+
+Refer to the model fitted in the previous exercise to predict college
+GPA. 
+
+(a) Test H0:$\beta_1 = \beta_2 = \beta_3 = 0$. Report the P-value and interpret.
+(b) Show how to conduct a significance test about the individual effect
+of hsgpa, adjusting for tv and sport, using $\alpha = 0.05$. Interpret. 
+(c) Is the effect in (b) significant at the $\alpha = 0.05$ level if we use the
+Bonferroni approach to test the family of three individual effects? Explain. 
+(d) Are the effects of tv and sport significant? Propose an alternative model.
+
+The model from the preceding exercise predicts college GPA (`cogpa`) using high-school GPA (`hsgpa`), television watching (`tv`) and sport (`sport`).
+
+```{r ex611-data, echo=TRUE}
+students <- read.table(
+  "http://stat4ds.rwth-aachen.de/data/Students.dat",
+  header = TRUE
+)
+
+fit <- lm(cogpa ~ hsgpa + tv + sport, data = students)
+summary(fit)
+```
+
+## (a) Test the joint hypothesis that all three slopes are zero
+
+The hypotheses are
+
+\[
+H_0:\beta_{\mathrm{hsgpa}}
+=\beta_{\mathrm{tv}}
+=\beta_{\mathrm{sport}}=0
+\]
+
+against the alternative that at least one of these slopes is nonzero.
+
+Use the overall regression \(F\)-test. With \(p=3\) predictors and \(n\) observations,
+
+\[
+F=\frac{SSR/p}{SSE/(n-p-1)},
+\]
+
+where
+
+\[
+SSR=\sum_{i=1}^n(\widehat y_i-\bar y)^2,\qquad
+SSE=\sum_{i=1}^n(y_i-\widehat y_i)^2.
+\]
+
+The test has \(p\) and \(n-p-1\) degrees of freedom under \(H_0\).
+
+```{r ex611-overall, echo=TRUE}
+n <- nobs(fit)
+p <- 3
+
+SSR <- sum((fitted(fit) - mean(students$cogpa))^2)
+SSE <- sum(residuals(fit)^2)
+
+F_stat <- (SSR / p) / (SSE / (n - p - 1))
+p_overall <- pf(F_stat, df1 = p, df2 = n - p - 1,
+                lower.tail = FALSE)
+
+c(F_statistic = F_stat,
+  numerator_df = p,
+  denominator_df = n - p - 1,
+  p_value = p_overall)
+```
+
+At significance level \(0.05\), fail to reject \(H_0\) as the data do not provide sufficient evidence that the three predictors, considered jointly, improve on an intercept-only model. This does not prove that every individual slope is zero.
+
+## (b) Test the individual effect of `hsgpa`, adjusting for `tv` and `sport`
+
+Test
+
+\[
+H_0:\beta_{\mathrm{hsgpa}}=0
+\qquad\text{against}\qquad
+H_1:\beta_{\mathrm{hsgpa}}\ne 0.
+\]
+
+The t-statistic is the estimated coefficient divided by its standard error:
+
+\[
+t=\frac{\widehat\beta_{\mathrm{hsgpa}}-0}
+        {SE(\widehat\beta_{\mathrm{hsgpa}})}.
+\]
+
+Use the residual degrees of freedom \(n-p-1\). The two-sided p-value is used because the alternative is \(\ne 0\).
+
+```{r ex611-hsgpa, echo=TRUE}
+coef_table <- summary(fit)$coefficients
+t_hsgpa <- coef_table["hsgpa", "t value"]
+p_hsgpa <- coef_table["hsgpa", "Pr(>|t|)"]
+df_resid <- df.residual(fit)
+
+c(estimate = coef_table["hsgpa", "Estimate"],
+  standard_error = coef_table["hsgpa", "Std. Error"],
+  t_statistic = t_hsgpa,
+  degrees_of_freedom = df_resid,
+  p_value = p_hsgpa)
+```
+
+At the $\alpha=$ \(0.05\) level, reject \(H_0\) given `p_hsgpa < 0.05`. The coefficient measures the expected change in college GPA associated with a one-unit increase in high-school GPA, **holding `tv` and `sport` fixed**.
+
+## (c) Apply the Bonferroni correction for the family of three slope tests
+
+When testing three individual effects as one family, the Bonferroni per-test significance level is
+
+\[
+\boxed{\alpha_{\mathrm{Bonf}}=\frac{0.05}{3}
+=0.01667.}
+\]
+
+Equivalently, multiply each unadjusted p-value by 3. For `hsgpa`, reject its null hypothesis only if its unadjusted p-value is below \(0.01667\), or if its Bonferroni-adjusted p-value is below \(0.05\).
+
+```{r ex611-bonferroni, echo=TRUE}
+individual_p <- coef_table[c("hsgpa", "tv", "sport"),
+                           "Pr(>|t|)"]
+bonferroni_p <- p.adjust(individual_p, method = "bonferroni")
+
+data.frame(
+  Predictor = names(individual_p),
+  Unadjusted_p = as.numeric(individual_p),
+  Bonferroni_adjusted_p = as.numeric(bonferroni_p),
+  Significant_familywise_5pct = as.numeric(bonferroni_p) < 0.05
+)
+
+alpha_bonf <- 0.05 / 3
+c(alpha_per_test = alpha_bonf,
+  hsgpa_unadjusted_p = individual_p["hsgpa"],
+  hsgpa_adjusted_p = bonferroni_p["hsgpa"])
+```
+
+The `hsgpa` p-value is approximately \(0.0439\), it is below \(0.05\) but above \(0.01667\). Thus it is significant without the correction, but **not significant after the Bonferroni correction**. This shows that accounting for the other variables, we can no longer say that `hsgpa` is statistically significant
+
+## (d) Assess `tv` and `sport` and propose a simpler model
+
+Inspect the individual p-values for `tv` and `sport`. At the \(0.05\) level, a predictor is not statistically significant if its p-value exceeds \(0.05\).
+
+```{r ex611-other-predictors, echo=TRUE}
+coef_table[c("tv", "sport"), , drop = FALSE]
+```
+
+The p-values are approximately \(0.6291\) for `tv` and \(0.2303\) for `sport`, neither predictor is individually significant at the \(0.05\) level. A reasonable simpler model to investigate is
+
+\[
+E(\mathrm{cogpa}\mid\mathrm{hsgpa})
+=\beta_0+\beta_1\mathrm{hsgpa}.
+\]
+
+```{r ex611-reduced, echo=TRUE}
+fit_reduced <- lm(cogpa ~ hsgpa, data = students)
+summary(fit_reduced)
+```
+
+The $R^2$ is about the same which means that it did not decrease the overall fit
+
+---
+
+# Exercise 6.42 - Quadratic regression  
+
+You can fit the quadratic equation $E[Y] = \beta_0 + \beta_1*x + \beta_2*x^2$ by fitting a multiple regression model with $x_1 = x$ and $x_2 = x^2$.
+
+(a) Simulate 100 independent observations from the model $Y = 40.0 - 5.0x + 0.5x^2 + \epsilon$, where X has a uniform distribution over [0, 10] and $\epsilon ~\mathcal{N}(0, 1)$. Plot the data and fit the quadratic model. Report how the fitted equation compares with the true relationship. 
+(b) Find the correlation between x and y and explain why it is so weak even though the plot shows a strong relationship with a large $R^2$ value for the quadratic model.
+
+The true model is
+
+\[
+Y=40-5X+0.5X^2+\varepsilon,
+\qquad X\sim U(0,10),\quad
+\varepsilon\sim N(0,1),
+\]
+
+with 100 independent observations in each simulated data set.
+
+## (a) Simulate data and fit the quadratic model
+
+A quadratic regression can be fitted using `lm(y ~ x + I(x^2))`. The `I()` tells R to treat `x^2` as the arithmetic square of `x`, rather than as a formula operator.
+
+```{r ex642-simulation, echo=TRUE}
+set.seed(123)  # Makes the simulation reproducible.
+
+n <- 100
+number_simulations <- 100
+
+true_mean <- function(x) {
+  40 - 5 * x + 0.5 * x^2
+}
+
+simulate_and_fit <- function(n) {
+  x <- runif(n, min = 0, max = 10)
+  epsilon <- rnorm(n, mean = 0, sd = 1)
+  y <- true_mean(x) + epsilon
+
+  model <- lm(y ~ x + I(x^2))
+
+  list(
+    x = x,
+    y = y,
+    coefficients = coef(model),
+    model = model
+  )
+}
+
+simulations <- replicate(
+  number_simulations,
+  simulate_and_fit(n),
+  simplify = FALSE
+)
+
+# Coefficients from each of the 100 fitted models.
+B <- do.call(
+  rbind,
+  lapply(simulations, function(result) result$coefficients)
+)
+colnames(B) <- c("Intercept", "x", "x_squared")
+
+# Compare the true coefficients with the average estimates
+# and the Monte Carlo standard deviations of the estimates.
+coefficient_summary <- rbind(
+  True = c(40, -5, 0.5),
+  Mean_estimate = colMeans(B),
+  SD_of_estimates = apply(B, 2, sd)
+)
+colnames(coefficient_summary) <- c("Intercept", "x", "x_squared")
+coefficient_summary
+```
+
+Plot the first simulated data set, its fitted quadratic curve and the true mean curve:
+
+```{r ex642-first-fit, echo=TRUE}
+first <- simulations[[1]]
+x_grid <- seq(0, 10, length.out = 200)
+
+plot(first$x, first$y, pch = 16, col = "grey50",
+     xlab = "x", ylab = "y",
+     main = "One simulated data set and fitted quadratic")
+lines(x_grid, true_mean(x_grid), col = "blue", lwd = 2)
+lines(x_grid, predict(first$model,
+                      newdata = data.frame(x = x_grid)),
+      col = "red", lwd = 2, lty = 2)
+
+legend("topright",
+       legend = c("True mean", "Fitted quadratic"),
+       col = c("blue", "red"), lwd = 2,
+       lty = c(1, 2), bty = "n")
+```
+
+The average coefficient estimates across repeated simulations are close to the true coefficients \(40\), \(-5\) and \(0.5\). They are not equal to them exactly because each simulated data set contains random variation. The standard deviations in the summary show how much the estimates vary across the 100 simulations.
+
+## (b) Correlation between \(X\) and \(Y\)
+
+Calculate the sample correlation for the first simulated data set:
+
+```{r ex642-correlation, echo=TRUE}
+cor(first$x, first$y)
+
+# R-squared for the quadratic regression on this same data set.
+summary(first$model)$r.squared
+```
+
+The correlation measures **linear** association. The true conditional mean is a quadratic curve,
+
+\[
+40-5x+0.5x^2,
+\]
+
+The quadratic regression includes \(X^2\), so it can capture complex models and can thus have a large \(R^2\). A weak correlation therefore indicates a weak **linear** relationship, not an absence of a strong nonlinear relationship.

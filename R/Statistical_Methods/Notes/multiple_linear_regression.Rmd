@@ -1,0 +1,69 @@
+---
+title: "Multiple linear regression"
+output: pdf_document
+date: "2026-11-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Linear Regression
+
+Remember that linear regression is $E[Y_i|X_i] = \beta_0 +\beta_1*x_i$ and requires
+1. Linearity 
+2. E[\espilon] = 0
+3. \V(\epsilon)=\sigma^2
+4. \epsilon_i \perpendicular \epsilon_j
+5. \epsilon ~\norm(0,\sigma^2)
+
+### Testing usefullness
+The deviance is TSS = \sum_{(y_i - \bar{mean})^2}
+SSR =  \sum_{(\hat(y_i) - \bar{y_i})^2}
+SSE =  \sum_{(y_i - \bar{y_i})^2}
+
+It can be decomposed as
+SS = \sum_{y_i-\bar{mean}} = \sum_{(\hat(y_i) - \bar{y_i})^2} + \sum_{(y_i - \bar{y_i})^2}
+
+to test we use F-statistics which is the ratio of
+1. the explained variability
+2. the unexplained variability
+
+We have
+TSS/\sigma^2 * (n-1)/\sigma^2 = s^2*(n-1)/\sigma^2 ~ \Xi^2_(n-1)
+SSR/\sigma^2 * (p-1)/(p-1) ~ \Xi^2_(p-1)
+SSE/\sigma^2 * (n-p)/(n-p) ~ \Xi^2_(n-p)
+
+Dividing we have
+TSS-SSE/SST = (R^2/p-1)/((1-R2)/(n-p)) ~ \fisher_(p-1),(n-p)
+
+Note: if you square the t-statistic then you get F-statistic if you have 1 parameter
+
+### Model checking
+You use the residuals of : e_i = y_i - \bar{y_i} (not that they are not errors \epsilon, but can be considered their realisation?what does realisation mean?)
+You want this to be as close to 0 as possible and variability to be constant
+
+plotting the red-line should be almost straight and, drawing 2 imaginary lines, the interval should be costant (variability)
+the resisuals q-q plot should also follow a normal distribution
+Residuals vs leverage will tell you the impact of influential values
+
+
+Another way is evaluate the error (\epsilon) vs covariate:
+e.g. seeing a curve, you can try to transform it by squaring the data -> \beta_0 + (\beta_1*x_i +) \beta_2*x_i^2
+
+## Multiple Linear Regression
+
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=True}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
